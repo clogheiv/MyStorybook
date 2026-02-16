@@ -37,17 +37,30 @@ export default function ChildProfilePicker({ onSelectChild }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flexDirection: 'row' },
-  item: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: 'transparent',
+  container: {
+    flexDirection: 'row',
+    gap: 16,
   },
-  itemSpacing: { marginRight: 12 },
-  itemActive: { backgroundColor: '#eef6ff', borderColor: '#bfdbfe' },
-  name: { fontSize: 16, color: '#0f172a' },
-  nameActive: { fontWeight: '700' },
+  item: {
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#E8E0D5',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  itemSpacing: { marginRight: 0 },
+  itemActive: {
+    backgroundColor: '#fff',
+    borderColor: '#D4A574',
+    shadowColor: "#D4A574",
+    shadowOpacity: 0.15,
+  },
+  name: { fontSize: 18, color: '#222222', fontWeight: '600' },
+  nameActive: { fontWeight: '700', color: '#D4A574' },
 });
