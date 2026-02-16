@@ -14,7 +14,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
-import { generateImageFromAI } from "../utils/imageGeneration";
+import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
 
 export default function StoryReaderScreen({ navigation, route }) {
   const { story, selectedChild } = route?.params || {};
@@ -63,6 +63,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const [pageImages, setPageImages] = useState({});
   const [loadingImages, setLoadingImages] = useState({});
+  const [failedImages, setFailedImages] = useState({});
   const [imageOpacity] = useState({});
   const [artStyle, setArtStyle] = useState("magical");
   const [pendingStyle, setPendingStyle] = useState(artStyle);
@@ -78,13 +79,6 @@ export default function StoryReaderScreen({ navigation, route }) {
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
 
-  // Centralized prompt builder for future extension
-  const buildIllustrationPrompt = ({ pageText, title, artStyle: styleKey }) => {
-    // This will be expanded later to include artStyle-specific templates
-    // For now, return a concise seed used by the generation util
-    return `${title || "Story"}: ${pageText.substring(0, 100)}`;
-  };
-
   // Generate illustration for page
   // Uses generateImageFromAI utility (swap internals for real API)
   const generateImageForPage = async (index, text) => {
@@ -94,18 +88,45 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     try {
       setLoadingImages((prev) => ({ ...prev, [k]: true }));
+      // clear any previous failure mark when we start a new attempt
+      if (failedImages[k]) {
+        setFailedImages((prev) => {
+          const next = { ...prev };
+          delete next[k];
+          return next;
+        });
+      }
 
       // Initialize opacity animation for this page/style
       if (!imageOpacity[k]) {
         imageOpacity[k] = new Animated.Value(0);
       }
 
-      const prompt = buildIllustrationPrompt({ pageText: text, title: story?.title, artStyle });
+      // Build structured prompt using the utility
+      const prompt = buildIllustrationPrompt({
+        storyTitle: story?.title || "Story",
+        pageText: text,
+        pageIndex: index,
+        artStyle: artStyle,
+        // Optional: childName, characterHints, toneHint can be passed if available
+      });
 
-      // Call image generation (structured for easy real AI swap)
+      // Log prompt in dev for verification
+      if (__DEV__) {
+        console.log(`[${k}] prompt:`, prompt);
+      }
+
+      // Call image generation (structured for easy real API swap)
       const imageUrl = await generateImageFromAI(prompt, story?.title, artStyle);
 
       setPageImages((prev) => ({ ...prev, [k]: imageUrl }));
+      // clear failed flag on success
+      setFailedImages((prev) => {
+        if (!prev[k]) return prev;
+        const next = { ...prev };
+        delete next[k];
+        return next;
+      });
 
       // Trigger fade-in animation
       if (imageOpacity[k]) {
@@ -117,6 +138,8 @@ export default function StoryReaderScreen({ navigation, route }) {
       }
     } catch (e) {
       console.warn("Image generation failed", e);
+      // mark failure so we don't endlessly retry automatically
+      setFailedImages((prev) => ({ ...prev, [k]: true }));
     } finally {
       setLoadingImages((prev) => ({ ...prev, [k]: false }));
     }
@@ -126,7 +149,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   useEffect(() => {
     const k = keyFor(pageIndex, artStyle);
     const text = pages[pageIndex];
-    if (text && !pageImages[k]) {
+    if (text && !pageImages[k] && !failedImages[k]) {
       generateImageForPage(pageIndex, text);
     }
 
@@ -141,6 +164,8 @@ export default function StoryReaderScreen({ navigation, route }) {
         // already have an entry (could be a placeholder/failure); skip
       } else if (loadingImages[kNext]) {
         // already generating; skip
+      } else if (failedImages[kNext]) {
+        // previously failed; skip automatic prefetch until user retries
       } else {
         const nextText = pages[nextIndex];
         // Fire it but don't await (background fetch)
@@ -198,6 +223,24 @@ export default function StoryReaderScreen({ navigation, route }) {
                         <Text style={styles.loadingText}>Illustrating…</Text>
                       </View>
                     )}
+
+                    {failedImages[k] && (
+                      <TouchableOpacity
+                        style={[styles.loadingOverlay, { backgroundColor: "rgba(255,255,255,0.95)" }]}
+                        onPress={() => {
+                          // clear failure mark and retry
+                          setFailedImages((prev) => {
+                            const next = { ...prev };
+                            delete next[k];
+                            return next;
+                          });
+                          generateImageForPage(index, pages[index]);
+                        }}
+                      >
+                        <Text style={styles.loadingText}>Image failed — tap to retry</Text>
+                      </TouchableOpacity>
+                    )}
+
                     {img && (
                       <Animated.Image
                         source={{ uri: img }}
@@ -205,7 +248,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                         resizeMode="cover"
                       />
                     )}
-                    {!img && !loading && <Text style={styles.illustrationHint}>Illustration</Text>}
+                    {!img && !loading && !failedImages[k] && <Text style={styles.illustrationHint}>Illustration</Text>}
                   </>
                 );
               })()}
