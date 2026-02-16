@@ -17,6 +17,9 @@ import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
 
+// Create AnimatedFlatList OUTSIDE component to maintain stable identity
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
+
 export default function StoryReaderScreen({ navigation, route }) {
   // DEBUG: Set to true to test FlatList paging in isolation
   const DEBUG_DUMMY_PAGING = false;
@@ -137,9 +140,6 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
-
-  // Animated FlatList for scroll-driven effects
-  const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
   // Generate illustration for page
   // Uses generateImageFromAI utility (swap internals for real API)
