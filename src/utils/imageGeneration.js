@@ -19,6 +19,11 @@
  * @param {string} config.pageText - Text content of the current page
  * @param {number} config.pageIndex - Zero-based page index
  * @param {string} config.artStyle - Art style (magical, bold_adventure, cozy, classic)
+ * @param {Object} [config.storyContext] - Story-level context for continuity
+ * @param {string} [config.storyContext.storyId] - Unique story ID
+ * @param {string} [config.storyContext.title] - Full story title
+ * @param {string} [config.storyContext.mainCharacter] - Main character name/description
+ * @param {string} [config.storyContext.settingHint] - Setting or world context
  * @param {string} [config.childName] - Optional name of child reading
  * @param {string} [config.characterHints] - Optional character descriptions
  * @param {string} [config.toneHint] - Optional tone guidance
@@ -29,6 +34,7 @@ function buildIllustrationPrompt({
   pageText,
   pageIndex,
   artStyle,
+  storyContext,
   childName,
   characterHints,
   toneHint,
@@ -62,6 +68,20 @@ function buildIllustrationPrompt({
     // Line 4: Constraints
     "No words or letters in the image. No watermarks. Keep characters visually consistent across pages.",
   ];
+
+  // Story context lines (for narrative continuity)
+  if (storyContext) {
+    const contextLines = [];
+    if (storyContext.mainCharacter) {
+      contextLines.push(`Main character: ${storyContext.mainCharacter}`);
+    }
+    if (storyContext.settingHint) {
+      contextLines.push(`Setting: ${storyContext.settingHint}`);
+    }
+    if (contextLines.length > 0) {
+      lines.push(`Story context: ${contextLines.join("; ")}`);
+    }
+  }
 
   // Optional additions
   if (characterHints) {

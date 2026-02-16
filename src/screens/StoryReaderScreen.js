@@ -23,6 +23,14 @@ const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 export default function StoryReaderScreen({ navigation, route }) {
   const { story, selectedChild } = route?.params || {};
 
+  // Story context for prompt continuity
+  const storyContext = {
+    storyId: story?.id,
+    title: story?.title,
+    mainCharacter: story?.mainCharacter ?? null,
+    settingHint: story?.setting ?? null,
+  };
+
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
 
@@ -124,6 +132,7 @@ export default function StoryReaderScreen({ navigation, route }) {
         pageText: text,
         pageIndex: index,
         artStyle: artStyle,
+        storyContext,
         // Optional: childName, characterHints, toneHint can be passed if available
       });
 
