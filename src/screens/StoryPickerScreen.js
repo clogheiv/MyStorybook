@@ -9,11 +9,11 @@ export default function StoryPickerScreen({ navigation, route }) {
     navigation.setOptions({
       title: "",
       headerStyle: {
-        backgroundColor: "#1F1633",
+        backgroundColor: "#241A3A",
         borderBottomWidth: 0,
         elevation: 0,
       },
-      headerTintColor: "#A78BFA",
+      headerTintColor: "#F4F1FF",
       headerBackTitle: " ",
     });
   }, [navigation]);
@@ -38,6 +38,7 @@ export default function StoryPickerScreen({ navigation, route }) {
       <Text style={styles.header}>
         Choose a story for {selectedChild || "them"}
       </Text>
+      <Text style={styles.subtitle}>Pick tonight's story</Text>
 
       <FlatList
         data={stories}
@@ -60,40 +61,48 @@ export default function StoryPickerScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1F1633",
+    backgroundColor: "#241A3A",
     padding: 20,
     paddingTop: 24,
   },
   header: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#F5F3FF",
-    marginBottom: 28,
+    color: "#F4F1FF",
+    marginBottom: 8,
     opacity: 0.9,
     letterSpacing: 0.3,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#F4F1FF",
+    marginBottom: 24,
+    opacity: 0.75,
+    letterSpacing: 0.2,
   },
   listContent: {
     gap: 18,
     paddingBottom: 24,
   },
   storyCard: {
-    backgroundColor: "#2A1F47",
-    borderRadius: 18,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    marginBottom: 18,
-    borderColor: "rgba(167,139,250,0.15)",
+    backgroundColor: "#2F234F",
+    borderRadius: 20,
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    marginBottom: 20,
+    borderColor: "rgba(255,230,180,0.12)",
     borderWidth: 1,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
   },
   storyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#F5F3FF",
+    color: "#F4F1FF",
     letterSpacing: 0.2,
   },
 });
