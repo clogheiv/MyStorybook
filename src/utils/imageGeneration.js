@@ -36,13 +36,13 @@ function buildIllustrationPrompt({
   // Style directives
   const STYLE_DIRECTIVES = {
     magical:
-      "Whimsical children's storybook illustration, soft glow, dreamy lighting, sparkles",
+      "Whimsical children's storybook illustration, soft glowing light, dreamy atmosphere, gentle sparkles, pastel color palette, magical and playful mood",
     bold_adventure:
-      "Cinematic, colorful, family-friendly 3D animated film look, adventurous",
+      "Cinematic family adventure illustration, vibrant colors, dynamic composition, dramatic lighting, heroic framing, Pixar-inspired animated film look, exciting and adventurous mood",
     cozy:
-      "Warm, cozy picture book illustration, gentle textures, soft warm light",
+      "Warm cozy picture book illustration, soft textures, warm lamplight, gentle shadows, calm comforting atmosphere, bedtime story feeling",
     classic:
-      "Classic storybook illustration, clean linework, timeless composition",
+      "Classic timeless storybook illustration, clean linework, balanced composition, soft natural colors, traditional children's book style",
   };
 
   const styleDirective =
@@ -60,7 +60,7 @@ function buildIllustrationPrompt({
     `Scene: ${pageText.substring(0, 80)}...`,
 
     // Line 4: Constraints
-    "Constraints: No words or letters in image, no watermarks, keep characters consistent.",
+    "No words or letters in the image. No watermarks. Keep characters visually consistent across pages.",
   ];
 
   // Optional additions
