@@ -10,6 +10,7 @@ import {
   Image,
   Animated,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as NavigationBar from "expo-navigation-bar";
@@ -21,6 +22,9 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
+
+  // Explicit page width for paging calculations
+  const PAGE_W = Dimensions.get("window").width;
 
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -327,7 +331,7 @@ export default function StoryReaderScreen({ navigation, route }) {
     );
 
     return (
-      <View style={[styles.page, { width }]}>
+      <View style={[styles.page, { width: PAGE_W }]}>
         {pageContent}
       </View>
     );
@@ -396,13 +400,6 @@ export default function StoryReaderScreen({ navigation, route }) {
         keyExtractor={(_, i) => String(i)}
         renderItem={renderPage}
         style={styles.pageScroller}
-        snapToInterval={width}
-        decelerationRate="fast"
-        getItemLayout={(_, index) => ({
-          length: width,
-          offset: width * index,
-          index,
-        })}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: true }
