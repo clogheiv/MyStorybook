@@ -32,17 +32,6 @@ export default function StoryReaderScreen({ navigation, route }) {
   // Explicit page width for paging calculations
   const PAGE_W = Dimensions.get("window").width;
 
-  // Track renders to detect re-mounts during gestures
-  if (__DEV__) {
-    console.log("StoryReaderScreen render", Date.now());
-  }
-
-  // Remount detector: log if component unmounts/remounts during swipe
-  useEffect(() => {
-    console.log("[StoryReader] MOUNT");
-    return () => console.log("[StoryReader] UNMOUNT");
-  }, []);
-
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
   const ENABLE_PAGE_TURN_ILLUSION = true;
@@ -461,7 +450,6 @@ export default function StoryReaderScreen({ navigation, route }) {
           setIsInteracting(false);
           const w = e.nativeEvent.layoutMeasurement.width;
           const i = Math.round(e.nativeEvent.contentOffset.x / w);
-          console.log(`[scroll] momentum ended at offset=${e.nativeEvent.contentOffset.x}, width=${w}, calculated index=${i}`);
           setPageIndex(i);
         }}
       />
