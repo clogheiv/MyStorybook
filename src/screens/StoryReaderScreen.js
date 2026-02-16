@@ -19,7 +19,7 @@ import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGene
 
 export default function StoryReaderScreen({ navigation, route }) {
   // DEBUG: Set to true to test FlatList paging in isolation
-  const DEBUG_DUMMY_PAGING = true;
+  const DEBUG_DUMMY_PAGING = false;
 
   const { story, selectedChild } = route?.params || {};
 
@@ -33,6 +33,12 @@ export default function StoryReaderScreen({ navigation, route }) {
   if (__DEV__) {
     console.log("StoryReaderScreen render", Date.now());
   }
+
+  // Remount detector: log if component unmounts/remounts during swipe
+  useEffect(() => {
+    console.log("[StoryReader] MOUNT");
+    return () => console.log("[StoryReader] UNMOUNT");
+  }, []);
 
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -98,13 +104,17 @@ export default function StoryReaderScreen({ navigation, route }) {
     };
   }, []);
 
-  const pages = [
-    "Once upon a quiet afternoon, a small turtle decided it was time to explore beyond the familiar pond.",
-    "With slow but steady steps, the turtle wandered through tall grass that whispered secrets in the breeze.",
-    "Along the way, the turtle met a curious rabbit who asked, “Why move so slowly?”",
-    "The turtle smiled and replied, “Because I like to notice things others rush past.”",
-    "By nightfall, the turtle felt brave. Not because it was fast, but because it kept taking the next small step.",
-  ];
+  // Stable pages data to prevent FlatList reconciliation issues
+  const pages = React.useMemo(
+    () => [
+      "Once upon a quiet afternoon, a small turtle decided it was time to explore beyond the familiar pond.",
+      "With slow but steady steps, the turtle wandered through tall grass that whispered secrets in the breeze.",
+      "Along the way, the turtle met a curious rabbit who asked, "Why move so slowly?"",
+      "The turtle smiled and replied, "Because I like to notice things others rush past."",
+      "By nightfall, the turtle felt brave. Not because it was fast, but because it kept taking the next small step.",
+    ],
+    []
+  );
 
   const [pageIndex, setPageIndex] = useState(0);
   const totalPages = pages.length;
@@ -451,6 +461,7 @@ export default function StoryReaderScreen({ navigation, route }) {
           setIsInteracting(false);
           const w = e.nativeEvent.layoutMeasurement.width;
           const i = Math.round(e.nativeEvent.contentOffset.x / w);
+          console.log(`[scroll] momentum ended at offset=${e.nativeEvent.contentOffset.x}, width=${w}, calculated index=${i}`);
           setPageIndex(i);
         }}
       />
