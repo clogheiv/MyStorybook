@@ -21,9 +21,6 @@ import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGene
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
 export default function StoryReaderScreen({ navigation, route }) {
-  // DEBUG: Set to true to test FlatList paging in isolation
-  const DEBUG_DUMMY_PAGING = false;
-
   const { story, selectedChild } = route?.params || {};
 
   const { width, height } = useWindowDimensions();
@@ -40,38 +37,6 @@ export default function StoryReaderScreen({ navigation, route }) {
   React.useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
-
-  // DUMMY PAGING TEST: Bypass all reader logic, test bare FlatList
-  if (DEBUG_DUMMY_PAGING) {
-    const dummyWidth = Dimensions.get("window").width;
-    const dummyData = Array.from({ length: 5 }, (_, i) => i);
-
-    return (
-      <View style={{ flex: 1, backgroundColor: "#fff" }}>
-        <FlatList
-          data={dummyData}
-          horizontal
-          pagingEnabled
-          keyExtractor={(i) => String(i)}
-          showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <View
-              style={{
-                width: dummyWidth,
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ fontSize: 48, fontWeight: "700" }}>
-                {item + 1}
-              </Text>
-            </View>
-          )}
-        />
-      </View>
-    );
-  }
 
   // Lock to landscape while reading
   useEffect(() => {
@@ -372,6 +337,38 @@ export default function StoryReaderScreen({ navigation, route }) {
     return (
       <View style={[styles.page, { width: PAGE_W }]}>
         {pageContent}
+        
+        {/* Page-turn illusion overlays (only render during active swipe) */}
+        {ENABLE_PAGE_TURN_ILLUSION && isInteracting && (
+          <>
+            {/* Dim overlay for leaving page */}
+            <Animated.View
+              style={[
+                styles.pageOverlay,
+                { backgroundColor: "#000", opacity: dimOpacity },
+              ]}
+            />
+
+            {/* Shadow sweep effect */}
+            <Animated.View
+              style={[
+                styles.shadowOverlay,
+                {
+                  opacity: shadowOpacity,
+                  transform: [{ translateX: shadowTranslateX }],
+                },
+              ]}
+            />
+
+            {/* Highlight on arriving page */}
+            <Animated.View
+              style={[
+                styles.highlightOverlay,
+                { opacity: highlightOpacity },
+              ]}
+            />
+          </>
+        )}
       </View>
     );
   };
@@ -435,6 +432,8 @@ export default function StoryReaderScreen({ navigation, route }) {
         data={pages}
         horizontal
         pagingEnabled
+        snapToInterval={PAGE_W}
+        decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         keyExtractor={(_, i) => String(i)}
         renderItem={renderPage}
@@ -581,5 +580,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     opacity: 0.5,
     textAlign: "center",
+  },
+
+  // Page-turn illusion overlays
+  pageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    pointerEvents: "none",
+  },
+  shadowOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 36,
+    height: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.22)",
+    pointerEvents: "none",
+  },
+  highlightOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    pointerEvents: "none",
   },
 });
