@@ -466,7 +466,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F7F3EA" },
+  screen: { flex: 1, backgroundColor: "#1F1633" },
 
   headerOverlay: {
     position: "absolute",
@@ -475,8 +475,8 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
 
-  title: { fontSize: 14, fontWeight: "700", marginBottom: 2 },
-  progress: { fontSize: 11, opacity: 0.5 },
+  title: { fontSize: 14, fontWeight: "700", color: "#F5F3FF", marginBottom: 2 },
+  progress: { fontSize: 11, opacity: 0.6, color: "#A78BFA" },
 
   styleSelector: {
     position: "absolute",
@@ -490,21 +490,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.05)",
+    backgroundColor: "rgba(42,31,71,0.8)",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
+    borderColor: "rgba(160,120,255,0.2)",
   },
   styleButtonActive: {
-    backgroundColor: "#E6F4FF",
-    borderColor: "#1890FF",
+    backgroundColor: "rgba(167,139,250,0.2)",
+    borderColor: "rgba(167,139,250,0.6)",
   },
   styleButtonText: {
     fontSize: 11,
     opacity: 0.6,
+    color: "#F5F3FF",
   },
   styleButtonTextActive: {
     opacity: 1,
     fontWeight: "600",
+    color: "#A78BFA",
   },
 
   styleUpdatingBadge: {
@@ -530,12 +532,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.7)",
+    backgroundColor: "rgba(167,139,250,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.3)",
   },
   closeText: {
     fontSize: 18,
     fontWeight: "700",
-    opacity: 0.7,
+    color: "#A78BFA",
   },
 
   pageScroller: { flex: 1 },
@@ -557,7 +561,7 @@ const styles = StyleSheet.create({
   leftPage: { flex: 1, justifyContent: "center" },
   rightPage: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  body: { fontSize: 17, lineHeight: 32, color: "#222222" },
+  body: { fontSize: 17, lineHeight: 32, color: "#F5F3FF" },
 
   illustrationBox: {
     width: "100%",

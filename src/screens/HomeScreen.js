@@ -32,7 +32,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F3EA",
+    backgroundColor: "#1F1633",
     paddingHorizontal: 24,
     paddingVertical: 40,
     justifyContent: "center",
@@ -44,12 +44,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#222222",
+    color: "#F5F3FF",
     marginBottom: 8,
+    letterSpacing: 0.5,
+    textShadowColor: "rgba(167,139,250,0.4)",
+    textShadowRadius: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: "#666666",
+    color: "rgba(245,243,255,0.7)",
     fontWeight: "500",
   },
   childPickerSection: {
@@ -57,22 +60,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   chooseStoryButton: {
-    backgroundColor: "#D4A574",
+    backgroundColor: "#A78BFA",
     paddingVertical: 18,
     paddingHorizontal: 48,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
   chooseStoryText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: "#1F1633",
   },
 });
 
