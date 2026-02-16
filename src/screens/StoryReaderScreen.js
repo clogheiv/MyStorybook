@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,10 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
+
+  // Page-turn illusion: track scroll position
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const ENABLE_PAGE_TURN_ILLUSION = true;
 
   // Hide navigation header
   React.useLayoutEffect(() => {
@@ -78,6 +82,9 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
+
+  // Animated FlatList for scroll-driven effects
+  const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
   // Generate illustration for page
   // Uses generateImageFromAI utility (swap internals for real API)
@@ -200,15 +207,93 @@ export default function StoryReaderScreen({ navigation, route }) {
     };
   }, []);
 
-  const renderPage = ({ item, index }) => (
-    <View style={[styles.page, { width }]}>
-      {isLandscape ? (
-        // Landscape: text left, illustration right, side-by-side
-        <View style={styles.spreadLandscape}>
-          <View style={styles.leftPage}>
-            <Text style={styles.body}>{item}</Text>
+  const renderPage = ({ item, index }) => {
+    // Interpolations for page-turn effect
+    const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
+
+    const dimOpacity = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.1, 0.0, 0.1],
+      extrapolate: "clamp",
+    });
+
+    const shadowOpacity = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.22, 0.0, 0.22],
+      extrapolate: "clamp",
+    });
+
+    const shadowTranslateX = scrollX.interpolate({
+      inputRange,
+      outputRange: [-36, 0, 36],
+      extrapolate: "clamp",
+    });
+
+    const highlightOpacity = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.14, 0.0, 0.14],
+      extrapolate: "clamp",
+    });
+
+    const pageContent = (
+      <>
+        {isLandscape ? (
+          // Landscape: text left, illustration right, side-by-side
+          <View style={styles.spreadLandscape}>
+            <View style={styles.leftPage}>
+              <Text style={styles.body}>{item}</Text>
+            </View>
+            <View style={styles.rightPage}>
+              <View style={styles.illustrationBox}>
+                {(() => {
+                  const k = keyFor(index, artStyle);
+                  const img = pageImages[k];
+                  const loading = loadingImages[k];
+                  const opacity = imageOpacity[k];
+                  return (
+                    <>
+                      {loading && (
+                        <View style={styles.loadingOverlay}>
+                          <ActivityIndicator size="large" color="#999" />
+                          <Text style={styles.loadingText}>Illustrating…</Text>
+                        </View>
+                      )}
+
+                      {failedImages[k] && (
+                        <TouchableOpacity
+                          style={[styles.loadingOverlay, { backgroundColor: "rgba(255,255,255,0.95)" }]}
+                          onPress={() => {
+                            // clear failure mark and retry
+                            setFailedImages((prev) => {
+                              const next = { ...prev };
+                              delete next[k];
+                              return next;
+                            });
+                            generateImageForPage(index, pages[index]);
+                          }}
+                        >
+                          <Text style={styles.loadingText}>Image failed — tap to retry</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {img && (
+                        <Animated.Image
+                          source={{ uri: img }}
+                          style={[{ width: "100%", height: "100%", borderRadius: 12 }, { opacity: opacity || 1 }]}
+                          resizeMode="cover"
+                        />
+                      )}
+                      {!img && !loading && !failedImages[k] && <Text style={styles.illustrationHint}>Illustration</Text>}
+                    </>
+                  );
+                })()}
+              </View>
+            </View>
           </View>
-          <View style={styles.rightPage}>
+        ) : (
+          // Portrait: text top, illustration below, stacked
+          <View style={styles.spreadPortrait}>
+            <Text style={styles.body}>{item}</Text>
             <View style={styles.illustrationBox}>
               {(() => {
                 const k = keyFor(index, artStyle);
@@ -223,24 +308,6 @@ export default function StoryReaderScreen({ navigation, route }) {
                         <Text style={styles.loadingText}>Illustrating…</Text>
                       </View>
                     )}
-
-                    {failedImages[k] && (
-                      <TouchableOpacity
-                        style={[styles.loadingOverlay, { backgroundColor: "rgba(255,255,255,0.95)" }]}
-                        onPress={() => {
-                          // clear failure mark and retry
-                          setFailedImages((prev) => {
-                            const next = { ...prev };
-                            delete next[k];
-                            return next;
-                          });
-                          generateImageForPage(index, pages[index]);
-                        }}
-                      >
-                        <Text style={styles.loadingText}>Image failed — tap to retry</Text>
-                      </TouchableOpacity>
-                    )}
-
                     {img && (
                       <Animated.Image
                         source={{ uri: img }}
@@ -248,47 +315,72 @@ export default function StoryReaderScreen({ navigation, route }) {
                         resizeMode="cover"
                       />
                     )}
-                    {!img && !loading && !failedImages[k] && <Text style={styles.illustrationHint}>Illustration</Text>}
+                    {!img && !loading && <Text style={styles.illustrationHint}>Illustration</Text>}
                   </>
                 );
               })()}
             </View>
           </View>
-        </View>
-      ) : (
-        // Portrait: text top, illustration below, stacked
-        <View style={styles.spreadPortrait}>
-          <Text style={styles.body}>{item}</Text>
-          <View style={styles.illustrationBox}>
-            {(() => {
-              const k = keyFor(index, artStyle);
-              const img = pageImages[k];
-              const loading = loadingImages[k];
-              const opacity = imageOpacity[k];
-              return (
-                <>
-                  {loading && (
-                    <View style={styles.loadingOverlay}>
-                      <ActivityIndicator size="large" color="#999" />
-                      <Text style={styles.loadingText}>Illustrating…</Text>
-                    </View>
-                  )}
-                  {img && (
-                    <Animated.Image
-                      source={{ uri: img }}
-                      style={[{ width: "100%", height: "100%", borderRadius: 12 }, { opacity: opacity || 1 }]}
-                      resizeMode="cover"
-                    />
-                  )}
-                  {!img && !loading && <Text style={styles.illustrationHint}>Illustration</Text>}
-                </>
-              );
-            })()}
+        )}
+      </>
+    );
+
+    return (
+      <View style={[styles.page, { width }]}>
+        {ENABLE_PAGE_TURN_ILLUSION ? (
+          <View style={{ position: "relative" }}>
+            {pageContent}
+
+            {/* Overall dim during swipe */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                backgroundColor: "#000",
+                opacity: dimOpacity,
+                borderRadius: 12,
+              }}
+            />
+
+            {/* Shadow sweep strip (left side during swipe) */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                width: 48,
+                backgroundColor: "#000",
+                opacity: shadowOpacity,
+                transform: [{ translateX: shadowTranslateX }],
+                borderTopLeftRadius: 12,
+                borderBottomLeftRadius: 12,
+              }}
+            />
+
+            {/* Edge highlight strip (right edge) */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                right: 0,
+                width: 10,
+                backgroundColor: "#fff",
+                opacity: highlightOpacity,
+                borderTopRightRadius: 12,
+                borderBottomRightRadius: 12,
+              }}
+            />
           </View>
-        </View>
-      )}
-    </View>
-  );
+        ) : (
+          pageContent
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.screen}>
@@ -345,7 +437,7 @@ export default function StoryReaderScreen({ navigation, route }) {
       </TouchableOpacity>
 
       {/* Swipeable pages */}
-      <FlatList
+      <AnimatedFlatList
         data={pages}
         horizontal
         pagingEnabled
@@ -360,6 +452,11 @@ export default function StoryReaderScreen({ navigation, route }) {
           offset: width * index,
           index,
         })}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
         onMomentumScrollEnd={(e) => {
           const w = e.nativeEvent.layoutMeasurement.width;
           const i = Math.round(e.nativeEvent.contentOffset.x / w);
