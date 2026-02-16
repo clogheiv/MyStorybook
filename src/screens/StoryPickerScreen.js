@@ -49,7 +49,7 @@ export default function StoryPickerScreen({ navigation, route }) {
             onPress={() => openStory(item)}
             style={styles.storyCard}
           >
-            <Text style={styles.storyTitle}>{item.title}</Text>
+            <Text style={styles.storyTitle}>📖 {item.title}</Text>
           </TouchableOpacity>
         )}
       />
@@ -68,24 +68,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     color: "#F5F3FF",
-    marginBottom: 24,
+    marginBottom: 28,
     opacity: 0.9,
     letterSpacing: 0.3,
   },
   listContent: {
-    gap: 14,
+    gap: 18,
+    paddingBottom: 24,
   },
   storyCard: {
     backgroundColor: "#2A1F47",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-    borderColor: "rgba(160,120,255,0.15)",
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    marginBottom: 18,
+    borderColor: "rgba(167,139,250,0.15)",
     borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   storyTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: "#F5F3FF",
+    letterSpacing: 0.2,
   },
 });
