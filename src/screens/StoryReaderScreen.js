@@ -109,8 +109,8 @@ export default function StoryReaderScreen({ navigation, route }) {
     () => [
       "Once upon a quiet afternoon, a small turtle decided it was time to explore beyond the familiar pond.",
       "With slow but steady steps, the turtle wandered through tall grass that whispered secrets in the breeze.",
-      "Along the way, the turtle met a curious rabbit who asked, "Why move so slowly?"",
-      "The turtle smiled and replied, "Because I like to notice things others rush past."",
+      "Along the way, the turtle met a curious rabbit who asked, \"Why move so slowly?\"",
+      "The turtle smiled and replied, \"Because I like to notice things others rush past.\"" ,
       "By nightfall, the turtle felt brave. Not because it was fast, but because it kept taking the next small step.",
     ],
     []
