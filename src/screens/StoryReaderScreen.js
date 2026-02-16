@@ -328,57 +328,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     return (
       <View style={[styles.page, { width }]}>
-        {ENABLE_PAGE_TURN_ILLUSION && isInteracting && Math.abs(index - pageIndex) <= 1 ? (
-          <View style={{ position: "relative", flex: 1 }}>
-            {pageContent}
-
-            {/* Overall dim during swipe */}
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                ...StyleSheet.absoluteFillObject,
-                backgroundColor: "#000",
-                opacity: dimOpacity,
-                borderRadius: 12,
-              }}
-            />
-
-            {/* Shadow sweep strip (left side during swipe) */}
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: 0,
-                width: 48,
-                backgroundColor: "#000",
-                opacity: shadowOpacity,
-                transform: [{ translateX: shadowTranslateX }],
-                borderTopLeftRadius: 12,
-                borderBottomLeftRadius: 12,
-              }}
-            />
-
-            {/* Edge highlight strip (right edge) */}
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                right: 0,
-                width: 10,
-                backgroundColor: "#fff",
-                opacity: highlightOpacity,
-                borderTopRightRadius: 12,
-                borderBottomRightRadius: 12,
-              }}
-            />
-          </View>
-        ) : (
-          pageContent
-        )}
+        {pageContent}
       </View>
     );
   };
