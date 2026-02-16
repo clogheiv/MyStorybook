@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   StyleSheet,
@@ -8,14 +7,13 @@ import {
   Alert,
 } from 'react-native';
 import ChildProfilePicker from '../components/ChildProfilePicker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function StoryLibraryScreen({ navigation }) {
+    const [selectedChild, setSelectedChild] = useState(null);
   const onChooseStory = () => {
-    // Placeholder action for choosing a story
-    console.log('Choose Story pressed');
-    // For now navigate to Home for testing
-    navigation.navigate('Home');
-  };
+     navigation.navigate("StoryPicker", { selectedChild }); 
+};
 
   const onParentCorner = () => {
     Alert.alert('Parent access — authentication coming soon');
@@ -30,7 +28,7 @@ export default function StoryLibraryScreen({ navigation }) {
         </View>
 
         <View style={styles.pickerWrap}>
-          <ChildProfilePicker />
+         <ChildProfilePicker onSelectChild={setSelectedChild} /> 
         </View>
 
         <TouchableOpacity style={styles.primaryButton} onPress={onChooseStory}>
