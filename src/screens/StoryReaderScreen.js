@@ -18,6 +18,9 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
 
 export default function StoryReaderScreen({ navigation, route }) {
+  // DEBUG: Set to true to test FlatList paging in isolation
+  const DEBUG_DUMMY_PAGING = true;
+
   const { story, selectedChild } = route?.params || {};
 
   const { width, height } = useWindowDimensions();
@@ -25,6 +28,11 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   // Explicit page width for paging calculations
   const PAGE_W = Dimensions.get("window").width;
+
+  // Track renders to detect re-mounts during gestures
+  if (__DEV__) {
+    console.log("StoryReaderScreen render", Date.now());
+  }
 
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -34,6 +42,38 @@ export default function StoryReaderScreen({ navigation, route }) {
   React.useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  // DUMMY PAGING TEST: Bypass all reader logic, test bare FlatList
+  if (DEBUG_DUMMY_PAGING) {
+    const dummyWidth = Dimensions.get("window").width;
+    const dummyData = Array.from({ length: 5 }, (_, i) => i);
+
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff" }}>
+        <FlatList
+          data={dummyData}
+          horizontal
+          pagingEnabled
+          keyExtractor={(i) => String(i)}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <View
+              style={{
+                width: dummyWidth,
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontSize: 48, fontWeight: "700" }}>
+                {item + 1}
+              </Text>
+            </View>
+          )}
+        />
+      </View>
+    );
+  }
 
   // Lock to landscape while reading
   useEffect(() => {
