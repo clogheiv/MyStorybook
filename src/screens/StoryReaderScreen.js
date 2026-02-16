@@ -466,7 +466,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+  screen: { flex: 1, backgroundColor: "#F7F3EA" },
 
   headerOverlay: {
     position: "absolute",
@@ -544,20 +544,20 @@ const styles = StyleSheet.create({
   spreadLandscape: {
     flex: 1,
     flexDirection: "row",
-    padding: 16,
+    padding: 20,
     gap: 20,
     alignItems: "center",
   },
   spreadPortrait: {
     flex: 1,
-    padding: 16,
+    padding: 20,
     justifyContent: "center",
   },
 
   leftPage: { flex: 1, justifyContent: "center" },
   rightPage: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  body: { fontSize: 17, lineHeight: 28 },
+  body: { fontSize: 17, lineHeight: 32, color: "#222222" },
 
   illustrationBox: {
     width: "100%",
