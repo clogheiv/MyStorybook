@@ -328,7 +328,7 @@ export default function StoryReaderScreen({ navigation, route }) {
     return (
       <View style={[styles.page, { width }]}>
         {ENABLE_PAGE_TURN_ILLUSION ? (
-          <View style={{ position: "relative" }}>
+          <View style={{ position: "relative", flex: 1 }}>
             {pageContent}
 
             {/* Overall dim during swipe */}
