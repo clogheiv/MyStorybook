@@ -71,6 +71,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [imageOpacity] = useState({});
   const [artStyle, setArtStyle] = useState("magical");
   const [pendingStyle, setPendingStyle] = useState(artStyle);
+  const [isInteracting, setIsInteracting] = useState(false);
   const styleDebounceRef = React.useRef(null);
 
   const ART_STYLES = [
@@ -327,7 +328,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     return (
       <View style={[styles.page, { width }]}>
-        {ENABLE_PAGE_TURN_ILLUSION ? (
+        {ENABLE_PAGE_TURN_ILLUSION && isInteracting && Math.abs(index - pageIndex) <= 1 ? (
           <View style={{ position: "relative", flex: 1 }}>
             {pageContent}
 
@@ -457,7 +458,10 @@ export default function StoryReaderScreen({ navigation, route }) {
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
+        onScrollBeginDrag={() => setIsInteracting(true)}
+        onScrollEndDrag={() => setIsInteracting(false)}
         onMomentumScrollEnd={(e) => {
+          setIsInteracting(false);
           const w = e.nativeEvent.layoutMeasurement.width;
           const i = Math.round(e.nativeEvent.contentOffset.x / w);
           setPageIndex(i);
