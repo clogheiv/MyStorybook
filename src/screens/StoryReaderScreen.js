@@ -119,13 +119,18 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const [pageIndex, setPageIndex] = useState(0);
   const totalPages = pages.length;
+  const progressRatio = totalPages > 0 ? (pageIndex + 1) / totalPages : 0;
 
   const [pageImages, setPageImages] = useState({});
   const [loadingImages, setLoadingImages] = useState({});
   const [failedImages, setFailedImages] = useState({});
   const [imageOpacity] = useState({});
+  const [progressTrackWidth, setProgressTrackWidth] = useState(0);
+  const progressAnim = useRef(new Animated.Value(progressRatio)).current;
   const controlsOpacity = useRef(new Animated.Value(1)).current;
   const listRef = useRef(null);
+  const listHasLayoutRef = useRef(false);
+  const pendingRestoreIndexRef = useRef(null);
   const saveDebounceRef = useRef(null);
   const controlsFadeTimerRef = useRef(null);
   const isMomentumScrollingRef = useRef(false);
@@ -218,6 +223,24 @@ export default function StoryReaderScreen({ navigation, route }) {
   const canGoPrevious = pageIndex > 0;
   const canGoNext = pageIndex < totalPages - 1;
 
+  const applyPendingRestoreScroll = React.useCallback(() => {
+    const restoreIndex = pendingRestoreIndexRef.current;
+    if (restoreIndex == null || !listHasLayoutRef.current) return;
+
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({
+        offset: restoreIndex * PAGE_W,
+        animated: false,
+      });
+      pendingRestoreIndexRef.current = null;
+    });
+  }, [PAGE_W]);
+
+  const handleListLayout = React.useCallback(() => {
+    listHasLayoutRef.current = true;
+    applyPendingRestoreScroll();
+  }, [applyPendingRestoreScroll]);
+
   const fadeControlsTo = React.useCallback(
     (toValue, duration) => {
       Animated.timing(controlsOpacity, {
@@ -258,6 +281,14 @@ export default function StoryReaderScreen({ navigation, route }) {
   }, []);
 
   useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progressRatio,
+      duration: 220,
+      useNativeDriver: false,
+    }).start();
+  }, [progressAnim, progressRatio]);
+
+  useEffect(() => {
     latestProgressRef.current = { pageIndex, artStyle };
   }, [pageIndex, artStyle]);
 
@@ -265,6 +296,8 @@ export default function StoryReaderScreen({ navigation, route }) {
   useEffect(() => {
     let cancelled = false;
     hasRestoredProgressRef.current = false;
+    listHasLayoutRef.current = false;
+    pendingRestoreIndexRef.current = null;
 
     const loadProgress = async () => {
       try {
@@ -281,14 +314,8 @@ export default function StoryReaderScreen({ navigation, route }) {
 
         if (cancelled) return;
         setPageIndex(clampedIndex);
-
-        requestAnimationFrame(() => {
-          if (cancelled) return;
-          listRef.current?.scrollToOffset({
-            offset: clampedIndex * PAGE_W,
-            animated: false,
-          });
-        });
+        pendingRestoreIndexRef.current = clampedIndex;
+        applyPendingRestoreScroll();
 
         console.log(`[readerProgress] loaded page ${clampedIndex} for ${progressStorageKey}`);
       } catch (error) {
@@ -305,7 +332,7 @@ export default function StoryReaderScreen({ navigation, route }) {
     return () => {
       cancelled = true;
     };
-  }, [progressStorageKey]);
+  }, [progressStorageKey, applyPendingRestoreScroll]);
 
   // Debounced save whenever page index changes.
   useEffect(() => {
@@ -573,23 +600,34 @@ export default function StoryReaderScreen({ navigation, route }) {
     <View style={{ flex: 1, backgroundColor: BG_TWILIGHT }}>
       <StatusBar hidden />
 
-      {/* Title and page indicator (subtle overlay, top-left) */}
-      <View style={styles.headerOverlay}>
-        <Text style={[styles.title, { fontSize: 20, letterSpacing: 0.5 }]}> 
-          {story?.title || "Story"}
-        </Text>
-        <Text style={styles.progress}>
-          {pageIndex + 1} of {totalPages}
-        </Text>
-      </View>
+      <View style={styles.headerRow}>
+        <View style={styles.headerLeft}>
+          <Text numberOfLines={1} style={[styles.title, { fontSize: 20, letterSpacing: 0.5 }]}>
+            {story?.title || "Story"}
+          </Text>
+          <Text style={styles.progress}>
+            {pageIndex + 1} of {totalPages}
+          </Text>
+        </View>
 
-      {/* Close button overlay (top-right) */}
-      <TouchableOpacity
-        style={styles.closeBtn}
-        onPress={requestExitReader}
-      >
-        <Text style={styles.closeText}>✕</Text>
-      </TouchableOpacity>
+        <View style={styles.headerProgressWrap}>
+          <View
+            style={styles.headerProgressTrack}
+            onLayout={(e) => setProgressTrackWidth(e.nativeEvent.layout.width)}
+          >
+            <Animated.View
+              style={[
+                styles.headerProgressFill,
+                { width: Animated.multiply(progressAnim, progressTrackWidth || 0) },
+              ]}
+            />
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.closeBtn} onPress={requestExitReader}>
+          <Text style={styles.closeText}>X</Text>
+        </TouchableOpacity>
+      </View>
 
       <Animated.View style={[styles.pageControls, { opacity: controlsOpacity }]}>
         <TouchableOpacity
@@ -611,6 +649,7 @@ export default function StoryReaderScreen({ navigation, route }) {
       {/* Swipeable pages */}
       <AnimatedFlatList
         ref={listRef}
+        onLayout={handleListLayout}
         data={pages}
         horizontal
         snapToInterval={PAGE_W}
@@ -652,21 +691,48 @@ export default function StoryReaderScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#1F1633" },
 
-  headerOverlay: {
+  headerRow: {
     position: "absolute",
     top: 12,
-    left: 12,
-    zIndex: 5,
+    left: 14,
+    right: 14,
+    zIndex: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerLeft: {
+    maxWidth: "42%",
+    minWidth: 120,
+    marginRight: 10,
+  },
+  headerProgressWrap: {
+    flex: 1,
+    marginHorizontal: 8,
+    justifyContent: "center",
+  },
+  headerProgressTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(167,139,250,0.22)",
+    overflow: "hidden",
+  },
+  headerProgressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "#A78BFA",
   },
 
   title: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#4B4266",
+    color: "#C8B04A",
     marginBottom: 2,
     letterSpacing: 0.3,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  progress: { fontSize: 11, opacity: 0.6, color: "#A78BFA" },
+  progress: { fontSize: 11, opacity: 0.8, color: "#D3C7FB" },
 
   styleSelector: {
     position: "absolute",
@@ -713,10 +779,6 @@ const styles = StyleSheet.create({
   },
 
   closeBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    zIndex: 10,
     width: 36,
     height: 36,
     borderRadius: 18,
