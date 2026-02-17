@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   useWindowDimensions,
   FlatList,
   Platform,
@@ -592,6 +593,18 @@ export default function StoryReaderScreen({ navigation, route }) {
             </View>
           </View>
         </View>
+        <View style={styles.tapZonesContainer} pointerEvents="box-none">
+          <Pressable
+            style={styles.tapZoneLeft}
+            onPress={() => scrollToPage(pageIndex - 1)}
+            disabled={!canGoPrevious}
+          />
+          <Pressable
+            style={styles.tapZoneRight}
+            onPress={() => scrollToPage(pageIndex + 1)}
+            disabled={!canGoNext}
+          />
+        </View>
       </View>
     );
   };
@@ -822,6 +835,21 @@ const styles = StyleSheet.create({
 
   pageScroller: { flex: 1 },
   page: { flex: 1 },
+  tapZonesContainer: {
+    ...StyleSheet.absoluteFillObject,
+    top: 72,
+    bottom: 0,
+    zIndex: 1,
+    flexDirection: "row",
+  },
+  tapZoneLeft: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  tapZoneRight: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
 
   spreadLandscape: {
     flex: 1,
