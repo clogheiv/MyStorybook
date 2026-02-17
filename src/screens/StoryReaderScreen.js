@@ -222,92 +222,37 @@ export default function StoryReaderScreen({ navigation, route }) {
   }, []);
 
   const renderPage = ({ item, index }) => {
-    // Interpolations for page-turn effect
-    const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
-
-    const dimOpacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.1, 0.0, 0.1],
-      extrapolate: "clamp",
-    });
-
-    const shadowOpacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.22, 0.0, 0.22],
-      extrapolate: "clamp",
-    });
-
-    const shadowTranslateX = scrollX.interpolate({
-      inputRange,
-      outputRange: [-36, 0, 36],
-      extrapolate: "clamp",
-    });
-
-    const highlightOpacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.14, 0.0, 0.14],
-      extrapolate: "clamp",
-    });
-
-    const pageContent = (
-      <>
-        {isLandscape ? (
-          // Landscape: text left, illustration right, side-by-side
-          <View style={styles.spreadLandscape}>
-            <View style={styles.leftPage}>
-              <Text style={styles.body}>{item}</Text>
+    return (
+      <View style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: BG_TWILIGHT,
+      }}>
+        <View style={{
+          width: PAGE_W * 0.92,
+          minHeight: isLandscape ? 320 : 420,
+          backgroundColor: PAPER,
+          borderRadius: 24,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.10,
+          shadowRadius: 24,
+          elevation: 8,
+          alignSelf: "center",
+          marginVertical: 18,
+          padding: isLandscape ? 24 : 20,
+          flexDirection: isLandscape ? "row" : "column",
+          gap: 24,
+        }}>
+          {isLandscape ? (
+            <View style={{ flex: 1, justifyContent: "center" }}>
+              <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item}</Text>
             </View>
-            <View style={styles.rightPage}>
-              <View style={styles.illustrationBox}>
-                {(() => {
-                  const k = keyFor(index, artStyle);
-                  const img = pageImages[k];
-                  const loading = loadingImages[k];
-                  const opacity = imageOpacity[k];
-                  return (
-                    <>
-                      {loading && (
-                        <View style={styles.loadingOverlay}>
-                          <ActivityIndicator size="large" color="#999" />
-                          <Text style={styles.loadingText}>Illustrating…</Text>
-                        </View>
-                      )}
-
-                      {failedImages[k] && (
-                        <TouchableOpacity
-                          style={[styles.loadingOverlay, { backgroundColor: "rgba(255,255,255,0.95)" }]}
-                          onPress={() => {
-                            // clear failure mark and retry
-                            setFailedImages((prev) => {
-                              const next = { ...prev };
-                              delete next[k];
-                              return next;
-                            });
-                            generateImageForPage(index, pages[index]);
-                          }}
-                        >
-                          <Text style={styles.loadingText}>Image failed — tap to retry</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {img && (
-                        <Animated.Image
-                          source={{ uri: img }}
-                          style={[{ width: "100%", height: "100%", borderRadius: 12 }, { opacity: opacity || 1 }]}
-                          resizeMode="cover"
-                        />
-                      )}
-                      {!img && !loading && !failedImages[k] && <Text style={styles.illustrationHint}>Illustration</Text>}
-                    </>
-                  );
-                })()}
-              </View>
-            </View>
-          </View>
-        ) : (
-          // Portrait: text top, illustration below, stacked
-          <View style={styles.spreadPortrait}>
-            <Text style={styles.body}>{item}</Text>
+          ) : (
+            <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item}</Text>
+          )}
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
             <View style={styles.illustrationBox}>
               {(() => {
                 const k = keyFor(index, artStyle);
@@ -335,14 +280,7 @@ export default function StoryReaderScreen({ navigation, route }) {
               })()}
             </View>
           </View>
-        )}
-      </>
-    );
-
-    return (
-      <View style={[styles.page, { width: PAGE_W }]}>
-        {pageContent}
-        
+        </View>
         {/* Page-turn illusion overlays (only render during active swipe) */}
         {ENABLE_PAGE_TURN_ILLUSION && isInteracting && (
           <>

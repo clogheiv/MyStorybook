@@ -111,8 +111,10 @@ const styles = StyleSheet.create({
   },
   styleSection: {
     width: "100%",
-    marginBottom: 28,
+    marginTop: 18,
+    marginBottom: 18,
     alignItems: "center",
+    paddingHorizontal: 16,
   },
   styleSectionTitle: {
     fontSize: 15,
@@ -121,11 +123,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontWeight: "600",
     letterSpacing: 0.1,
+    textAlign: "center",
   },
   styleSelector: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 4,
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 0,
   },
   styleButton: {
     paddingHorizontal: 12,
@@ -134,6 +139,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(42,31,71,0.8)",
     borderWidth: 1,
     borderColor: "rgba(160,120,255,0.2)",
+    marginRight: 0,
+    marginBottom: 10,
   },
   styleButtonActive: {
     backgroundColor: "rgba(167,139,250,0.2)",

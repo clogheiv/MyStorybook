@@ -11,7 +11,11 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Welcome to My Storybook 📖</Text>
-        <Text style={styles.subtitle}>Pick who we're reading with today</Text>
+        <Text style={styles.subtitle}>
+          {selectedChild?.name
+            ? `${selectedChild.name}, ready for a story?`
+            : "Pick who we’re reading with"}
+        </Text>
       </View>
 
       <View style={styles.childPickerSection}>
@@ -20,7 +24,7 @@ export default function HomeScreen() {
 
       <TouchableOpacity
         style={styles.chooseStoryButton}
-        onPress={() => navigation.navigate('StoryLibrary', { selectedChild })}
+        onPress={() => navigation.navigate('StoryPicker', { selectedChild })}
         disabled={!selectedChild}
       >
         <Text style={styles.chooseStoryText}>Choose Story</Text>
