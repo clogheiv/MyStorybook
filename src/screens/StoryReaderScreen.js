@@ -152,6 +152,33 @@ export default function StoryReaderScreen({ navigation, route }) {
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
 
+  const retryImageForPage = (index, promptText) => {
+    const k = keyFor(index, artStyle);
+    setFailedImages((prev) => {
+      if (!prev[k]) return prev;
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+    setPageImages((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, k)) return prev;
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+    // Immediate feedback while retry request starts.
+    setLoadingImages((prev) => ({ ...prev, [k]: true }));
+
+    if (promptText) {
+      generateImageForPage(index, promptText, {
+        force: true,
+        retryNonce: Date.now(),
+      });
+    } else {
+      setLoadingImages((prev) => ({ ...prev, [k]: false }));
+    }
+  };
+
   useEffect(() => {
     latestProgressRef.current = { pageIndex, artStyle };
   }, [pageIndex, artStyle]);
@@ -258,10 +285,11 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   // Generate illustration for page
   // Uses generateImageFromAI utility (swap internals for real API)
-  const generateImageForPage = async (index, text) => {
+  const generateImageForPage = async (index, text, options = {}) => {
+    const { force = false, retryNonce = null } = options;
     const k = keyFor(index, artStyle);
     // Guard: avoid double-generation if already in-flight
-    if (loadingImages[k]) return;
+    if (loadingImages[k] && !force) return;
 
     try {
       setLoadingImages((prev) => ({ ...prev, [k]: true }));
@@ -296,8 +324,12 @@ export default function StoryReaderScreen({ navigation, route }) {
 
       // Call image generation (structured for easy real API swap)
       const imageUrl = await generateImageFromAI(prompt, story?.title, artStyle);
+      const resolvedUrl =
+        retryNonce != null
+          ? `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}retry=${retryNonce}`
+          : imageUrl;
 
-      setPageImages((prev) => ({ ...prev, [k]: imageUrl }));
+      setPageImages((prev) => ({ ...prev, [k]: resolvedUrl }));
       // clear failed flag on success
       setFailedImages((prev) => {
         if (!prev[k]) return prev;
@@ -409,7 +441,9 @@ export default function StoryReaderScreen({ navigation, route }) {
                 const k = keyFor(index, artStyle);
                 const img = pageImages[k];
                 const loading = loadingImages[k];
+                const failed = failedImages[k];
                 const opacity = imageOpacity[k];
+                const promptText = item?.prompt || item?.text;
                 return (
                   <>
                     {loading && (
@@ -423,7 +457,28 @@ export default function StoryReaderScreen({ navigation, route }) {
                         source={{ uri: img }}
                         style={[{ width: "100%", height: "100%", borderRadius: 12 }, { opacity: opacity || 1 }]}
                         resizeMode="cover"
+                        onLoad={() => {
+                          setFailedImages((prev) => {
+                            if (!prev[k]) return prev;
+                            const next = { ...prev };
+                            delete next[k];
+                            return next;
+                          });
+                        }}
+                        onError={() => {
+                          setFailedImages((prev) => ({ ...prev, [k]: true }));
+                          setLoadingImages((prev) => ({ ...prev, [k]: false }));
+                        }}
                       />
+                    )}
+                    {failed && !loading && (
+                      <TouchableOpacity
+                        style={styles.retryOverlay}
+                        activeOpacity={0.85}
+                        onPress={() => retryImageForPage(index, promptText)}
+                      >
+                        <Text style={styles.retryText}>Illustration failed to load. Tap to retry.</Text>
+                      </TouchableOpacity>
                     )}
                     {!img && !loading && <Text style={styles.illustrationHint}>Illustration</Text>}
                   </>
@@ -616,6 +671,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 10,
     opacity: 0.6,
+  },
+  retryOverlay: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.35)",
+    zIndex: 3,
+    paddingHorizontal: 12,
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
   },
   illustrationHint: {
     fontSize: 13,
