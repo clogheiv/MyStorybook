@@ -220,29 +220,6 @@ export default function StoryReaderScreen({ navigation, route }) {
   }, []);
 
   const renderPage = ({ item, index }) => {
-    // Always define overlay interpolations
-    const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
-    const dimOpacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.1, 0.0, 0.1],
-      extrapolate: "clamp",
-    });
-    const shadowOpacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.22, 0.0, 0.22],
-      extrapolate: "clamp",
-    });
-    const shadowTranslateX = scrollX.interpolate({
-      inputRange,
-      outputRange: [-36, 0, 36],
-      extrapolate: "clamp",
-    });
-    const highlightOpacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.14, 0.0, 0.14],
-      extrapolate: "clamp",
-    });
-
     return (
       <View style={{ width: PAGE_W, flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: BG_TWILIGHT }}>
         <View style={{
@@ -297,35 +274,6 @@ export default function StoryReaderScreen({ navigation, route }) {
             </View>
           </View>
         </View>
-        {/* Page-turn illusion overlays (only render during active swipe) */}
-        {ENABLE_PAGE_TURN_ILLUSION && isInteracting && (
-          <>
-            {/* Dim overlay for leaving page */}
-            <Animated.View
-              style={[
-                styles.pageOverlay,
-                { backgroundColor: "#000", opacity: dimOpacity },
-              ]}
-            />
-            {/* Shadow sweep effect */}
-            <Animated.View
-              style={[
-                styles.shadowOverlay,
-                {
-                  opacity: shadowOpacity,
-                  transform: [{ translateX: shadowTranslateX }],
-                },
-              ]}
-            />
-            {/* Highlight on arriving page */}
-            <Animated.View
-              style={[
-                styles.highlightOverlay,
-                { opacity: highlightOpacity },
-              ]}
-            />
-          </>
-        )}
       </View>
     );
   };
