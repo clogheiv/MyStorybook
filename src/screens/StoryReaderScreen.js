@@ -21,10 +21,11 @@ import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGene
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
 const BG_TWILIGHT = "#241A3A";
-const PAPER = "#F7F3EA";
+const PAPER = "#F3F0E6";
 const INK = "#1E1B2E";
 
 export default function StoryReaderScreen({ navigation, route }) {
+  // All hooks must be at the top level, in the same order every render
   const { story, selectedChild, artStyle } = route?.params || {};
 
   // Story context for prompt continuity
@@ -221,23 +222,32 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const renderPage = ({ item, index }) => {
     return (
-      <View style={{ width: PAGE_W, flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: BG_TWILIGHT }}>
-        <View style={{
-          minHeight: isLandscape ? 320 : 420,
-          backgroundColor: PAPER,
-          borderRadius: 24,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.10,
-          shadowRadius: 24,
-          elevation: 8,
-          alignSelf: "center",
-          marginVertical: 18,
-          padding: isLandscape ? 24 : 20,
-          flexDirection: isLandscape ? "row" : "column",
-          gap: 24,
-          width: "92%", // inner paper width, not outer
-        }}>
+      <View style={{
+        width: PAGE_W,
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: BG_TWILIGHT,
+      }}>
+        <View
+          style={{
+            minHeight: isLandscape ? 320 : 420,
+            backgroundColor: PAPER,
+            borderRadius: 24,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.10,
+            shadowRadius: 24,
+            elevation: 8,
+            alignSelf: "center",
+            marginVertical: 18,
+            padding: isLandscape ? 24 : 20,
+            flexDirection: isLandscape ? "row" : "column",
+            gap: 24,
+            width: "92%",
+            overflow: "hidden",
+          }}
+        >
           {isLandscape ? (
             <View style={{ flex: 1, justifyContent: "center" }}>
               <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item}</Text>
@@ -284,7 +294,9 @@ export default function StoryReaderScreen({ navigation, route }) {
 
       {/* Title and page indicator (subtle overlay, top-left) */}
       <View style={styles.headerOverlay}>
-        <Text style={styles.title}>{story?.title || "Story"}</Text>
+        <Text style={[styles.title, { fontSize: 20, letterSpacing: 0.5 }]}> 
+          {story?.title || "Story"}
+        </Text>
         <Text style={styles.progress}>
           {pageIndex + 1} of {totalPages}
         </Text>
