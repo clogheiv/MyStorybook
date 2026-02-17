@@ -339,7 +339,13 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
 
-  title: { fontSize: 14, fontWeight: "700", color: "#F5F3FF", marginBottom: 2 },
+  title: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2B2B2B",
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
   progress: { fontSize: 11, opacity: 0.6, color: "#A78BFA" },
 
   styleSelector: {
