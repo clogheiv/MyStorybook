@@ -15,6 +15,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
 
 // Create AnimatedFlatList OUTSIDE component to maintain stable identity
@@ -23,6 +24,14 @@ const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 const BG_TWILIGHT = "#241A3A";
 const PAPER = "#F3F0E6";
 const INK = "#1E1B2E";
+
+const DEMO_PAGES = [
+  "Once upon a quiet afternoon, a small turtle decided it was time to explore beyond the familiar pond.",
+  "With slow but steady steps, the turtle wandered through tall grass that whispered secrets in the breeze.",
+  "Along the way, the turtle met a curious rabbit who asked, \"Why move so slowly?\"",
+  "The turtle smiled and replied, \"Because I like to notice things others rush past.\"",
+  "By nightfall, the turtle felt brave. Not because it was fast, but because it kept taking the next small step.",
+];
 
 export default function StoryReaderScreen({ navigation, route }) {
   // All hooks must be at the top level, in the same order every render
@@ -72,16 +81,38 @@ export default function StoryReaderScreen({ navigation, route }) {
     };
   }, []);
 
-  // Stable pages data to prevent FlatList reconciliation issues
+  // Normalize story pages into a consistent shape for rendering + prompting.
+  // Supports:
+  // - string[]
+  // - { text: string, prompt?: string }[]
+  // Falls back to demo pages if story.pages is missing/empty/invalid.
   const pages = React.useMemo(
-    () => [
-      "Once upon a quiet afternoon, a small turtle decided it was time to explore beyond the familiar pond.",
-      "With slow but steady steps, the turtle wandered through tall grass that whispered secrets in the breeze.",
-      "Along the way, the turtle met a curious rabbit who asked, \"Why move so slowly?\"",
-      "The turtle smiled and replied, \"Because I like to notice things others rush past.\"" ,
-      "By nightfall, the turtle felt brave. Not because it was fast, but because it kept taking the next small step.",
-    ],
-    []
+    () => {
+      const sourcePages = story?.pages;
+      if (Array.isArray(sourcePages) && sourcePages.length > 0) {
+        const normalized = sourcePages
+          .map((page) => {
+            if (typeof page === "string") {
+              return { text: page, prompt: page };
+            }
+            if (page && typeof page === "object" && typeof page.text === "string") {
+              const prompt = typeof page.prompt === "string" && page.prompt.trim()
+                ? page.prompt
+                : page.text;
+              return { text: page.text, prompt };
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        if (normalized.length > 0) {
+          return normalized;
+        }
+      }
+
+      return DEMO_PAGES.map((text) => ({ text, prompt: text }));
+    },
+    [story?.pages]
   );
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -91,12 +122,139 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [loadingImages, setLoadingImages] = useState({});
   const [failedImages, setFailedImages] = useState({});
   const [imageOpacity] = useState({});
-  const [pendingStyle, setPendingStyle] = useState(artStyle);
-  const [isInteracting, setIsInteracting] = useState(false);
-  const styleDebounceRef = React.useRef(null);
+  const listRef = useRef(null);
+  const saveDebounceRef = useRef(null);
+  const hasRestoredProgressRef = useRef(false);
+  const latestProgressRef = useRef({ pageIndex: 0, artStyle });
+
+  const progressStorageKey = React.useMemo(() => {
+    const storyId =
+      story?.id != null && String(story.id).trim()
+        ? String(story.id).trim()
+        : typeof story?.title === "string" && story.title.trim()
+        ? story.title.trim()
+        : "unknown";
+
+    let childId = "unknown";
+    if (selectedChild && typeof selectedChild === "object") {
+      if (selectedChild.id != null && String(selectedChild.id).trim()) {
+        childId = String(selectedChild.id).trim();
+      } else if (typeof selectedChild.name === "string" && selectedChild.name.trim()) {
+        childId = selectedChild.name.trim();
+      }
+    } else if (typeof selectedChild === "string" && selectedChild.trim()) {
+      childId = selectedChild.trim();
+    }
+
+    return `readerProgress:${storyId}:${childId}`;
+  }, [story?.id, story?.title, selectedChild]);
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
+
+  useEffect(() => {
+    latestProgressRef.current = { pageIndex, artStyle };
+  }, [pageIndex, artStyle]);
+
+  // Load saved reading progress and restore page position.
+  useEffect(() => {
+    let cancelled = false;
+    hasRestoredProgressRef.current = false;
+
+    const loadProgress = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(progressStorageKey);
+        if (!raw) return;
+
+        const parsed = JSON.parse(raw);
+        const savedIndex = Number(parsed?.pageIndex);
+        if (!Number.isFinite(savedIndex)) return;
+
+        const clampedIndex = totalPages > 0
+          ? Math.min(Math.max(Math.floor(savedIndex), 0), totalPages - 1)
+          : 0;
+
+        if (cancelled) return;
+        setPageIndex(clampedIndex);
+
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          listRef.current?.scrollToOffset({
+            offset: clampedIndex * PAGE_W,
+            animated: false,
+          });
+        });
+
+        console.log(`[readerProgress] loaded page ${clampedIndex} for ${progressStorageKey}`);
+      } catch (error) {
+        console.warn("Failed to load reader progress", error);
+      } finally {
+        if (!cancelled) {
+          hasRestoredProgressRef.current = true;
+        }
+      }
+    };
+
+    loadProgress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [progressStorageKey]);
+
+  // Debounced save whenever page index changes.
+  useEffect(() => {
+    if (!hasRestoredProgressRef.current) return;
+
+    if (saveDebounceRef.current) {
+      clearTimeout(saveDebounceRef.current);
+    }
+
+    saveDebounceRef.current = setTimeout(async () => {
+      const { pageIndex: latestPageIndex, artStyle: latestArtStyle } = latestProgressRef.current;
+      try {
+        await AsyncStorage.setItem(
+          progressStorageKey,
+          JSON.stringify({ pageIndex: latestPageIndex, artStyle: latestArtStyle })
+        );
+      } catch (error) {
+        console.warn("Failed to save reader progress", error);
+      } finally {
+        saveDebounceRef.current = null;
+      }
+    }, 300);
+
+    return () => {
+      if (saveDebounceRef.current) {
+        clearTimeout(saveDebounceRef.current);
+        saveDebounceRef.current = null;
+      }
+    };
+  }, [pageIndex, artStyle, progressStorageKey]);
+
+  // Save latest progress on unmount.
+  useEffect(() => {
+    return () => {
+      if (saveDebounceRef.current) {
+        clearTimeout(saveDebounceRef.current);
+        saveDebounceRef.current = null;
+      }
+
+      if (!hasRestoredProgressRef.current) return;
+
+      const { pageIndex: latestPageIndex, artStyle: latestArtStyle } = latestProgressRef.current;
+      AsyncStorage.setItem(
+        progressStorageKey,
+        JSON.stringify({ pageIndex: latestPageIndex, artStyle: latestArtStyle })
+      )
+        .then(() => {
+          console.log(`[readerProgress] saved page ${latestPageIndex} for ${progressStorageKey}`);
+        })
+        .catch((error) => {
+          console.warn("Failed to save reader progress on unmount", error);
+        });
+    };
+  }, [progressStorageKey]);
 
   // Generate illustration for page
   // Uses generateImageFromAI utility (swap internals for real API)
@@ -168,9 +326,10 @@ export default function StoryReaderScreen({ navigation, route }) {
   // Auto-generate image when page changes
   useEffect(() => {
     const k = keyFor(pageIndex, artStyle);
-    const text = pages[pageIndex];
-    if (text && !pageImages[k] && !failedImages[k]) {
-      generateImageForPage(pageIndex, text);
+    const page = pages[pageIndex];
+    const promptText = page?.prompt || page?.text;
+    if (promptText && !pageImages[k] && !failedImages[k]) {
+      generateImageForPage(pageIndex, promptText);
     }
 
     // Pre-generate next page for instant feel (style-aware)
@@ -187,38 +346,27 @@ export default function StoryReaderScreen({ navigation, route }) {
       } else if (failedImages[kNext]) {
         // previously failed; skip automatic prefetch until user retries
       } else {
-        const nextText = pages[nextIndex];
+        const nextPage = pages[nextIndex];
+        const nextPromptText = nextPage?.prompt || nextPage?.text;
         // Fire it but don't await (background fetch)
-        generateImageForPage(nextIndex, nextText);
+        if (nextPromptText) {
+          generateImageForPage(nextIndex, nextPromptText);
+        }
       }
     }
   }, [pageIndex, artStyle]);
 
-  // Debounced style change: only commit artStyle after delay
-  const handleStylePress = (styleKey) => {
-    // immediate visual feedback via pendingStyle
-    setPendingStyle(styleKey);
-
-    // clear existing timer
-    if (styleDebounceRef.current) {
-      clearTimeout(styleDebounceRef.current);
+  // Keep page index in-range when page source changes.
+  useEffect(() => {
+    if (totalPages === 0) {
+      if (pageIndex !== 0) setPageIndex(0);
+      return;
     }
 
-    // debounce commit
-    styleDebounceRef.current = setTimeout(() => {
-      // avoid redundant set
-      setArtStyle((prev) => (prev === styleKey ? prev : styleKey));
-      styleDebounceRef.current = null;
-    }, 200);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (styleDebounceRef.current) {
-        clearTimeout(styleDebounceRef.current);
-      }
-    };
-  }, []);
+    if (pageIndex > totalPages - 1) {
+      setPageIndex(totalPages - 1);
+    }
+  }, [pageIndex, totalPages]);
 
   const renderPage = ({ item, index }) => {
     return (
@@ -250,10 +398,10 @@ export default function StoryReaderScreen({ navigation, route }) {
         >
           {isLandscape ? (
             <View style={{ flex: 1, justifyContent: "center" }}>
-              <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item}</Text>
+              <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item?.text}</Text>
             </View>
           ) : (
-            <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item}</Text>
+            <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item?.text}</Text>
           )}
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
             <View style={styles.illustrationBox}>
@@ -312,6 +460,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
       {/* Swipeable pages */}
       <AnimatedFlatList
+        ref={listRef}
         data={pages}
         horizontal
         snapToInterval={PAGE_W}
@@ -328,10 +477,7 @@ export default function StoryReaderScreen({ navigation, route }) {
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
-        onScrollBeginDrag={() => setIsInteracting(true)}
-        onScrollEndDrag={() => setIsInteracting(false)}
         onMomentumScrollEnd={(e) => {
-          setIsInteracting(false);
           const w = e.nativeEvent.layoutMeasurement.width;
           const i = Math.round(e.nativeEvent.contentOffset.x / w);
           setPageIndex(i);
