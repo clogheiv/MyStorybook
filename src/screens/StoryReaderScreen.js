@@ -124,8 +124,11 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [loadingImages, setLoadingImages] = useState({});
   const [failedImages, setFailedImages] = useState({});
   const [imageOpacity] = useState({});
+  const controlsOpacity = useRef(new Animated.Value(1)).current;
   const listRef = useRef(null);
   const saveDebounceRef = useRef(null);
+  const controlsFadeTimerRef = useRef(null);
+  const isMomentumScrollingRef = useRef(false);
   const hasRestoredProgressRef = useRef(false);
   const latestProgressRef = useRef({ pageIndex: 0, artStyle });
 
@@ -214,6 +217,45 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const canGoPrevious = pageIndex > 0;
   const canGoNext = pageIndex < totalPages - 1;
+
+  const fadeControlsTo = React.useCallback(
+    (toValue, duration) => {
+      Animated.timing(controlsOpacity, {
+        toValue,
+        duration,
+        useNativeDriver: true,
+      }).start();
+    },
+    [controlsOpacity]
+  );
+
+  const hideControlsDuringInteraction = React.useCallback(() => {
+    if (controlsFadeTimerRef.current) {
+      clearTimeout(controlsFadeTimerRef.current);
+      controlsFadeTimerRef.current = null;
+    }
+    fadeControlsTo(0, 150);
+  }, [fadeControlsTo]);
+
+  const scheduleControlsFadeIn = React.useCallback(() => {
+    if (controlsFadeTimerRef.current) {
+      clearTimeout(controlsFadeTimerRef.current);
+    }
+
+    controlsFadeTimerRef.current = setTimeout(() => {
+      fadeControlsTo(1, 200);
+      controlsFadeTimerRef.current = null;
+    }, 1000);
+  }, [fadeControlsTo]);
+
+  useEffect(() => {
+    return () => {
+      if (controlsFadeTimerRef.current) {
+        clearTimeout(controlsFadeTimerRef.current);
+        controlsFadeTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     latestProgressRef.current = { pageIndex, artStyle };
@@ -549,7 +591,7 @@ export default function StoryReaderScreen({ navigation, route }) {
         <Text style={styles.closeText}>✕</Text>
       </TouchableOpacity>
 
-      <View style={styles.pageControls}>
+      <Animated.View style={[styles.pageControls, { opacity: controlsOpacity }]}>
         <TouchableOpacity
           style={[styles.pageControlButton, !canGoPrevious && styles.pageControlButtonDisabled]}
           disabled={!canGoPrevious}
@@ -564,7 +606,7 @@ export default function StoryReaderScreen({ navigation, route }) {
         >
           <Text style={styles.pageControlText}>Next</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Swipeable pages */}
       <AnimatedFlatList
@@ -585,10 +627,22 @@ export default function StoryReaderScreen({ navigation, route }) {
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
+        onScrollBeginDrag={hideControlsDuringInteraction}
+        onScrollEndDrag={() => {
+          if (!isMomentumScrollingRef.current) {
+            scheduleControlsFadeIn();
+          }
+        }}
+        onMomentumScrollBegin={() => {
+          isMomentumScrollingRef.current = true;
+          hideControlsDuringInteraction();
+        }}
         onMomentumScrollEnd={(e) => {
+          isMomentumScrollingRef.current = false;
           const w = e.nativeEvent.layoutMeasurement.width;
           const i = Math.round(e.nativeEvent.contentOffset.x / w);
           setPageIndex(i);
+          scheduleControlsFadeIn();
         }}
       />
     </View>
