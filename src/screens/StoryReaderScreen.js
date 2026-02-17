@@ -204,6 +204,17 @@ export default function StoryReaderScreen({ navigation, route }) {
     }
   };
 
+  const scrollToPage = (targetIndex) => {
+    if (targetIndex < 0 || targetIndex > totalPages - 1) return;
+    listRef.current?.scrollToOffset({
+      offset: targetIndex * PAGE_W,
+      animated: true,
+    });
+  };
+
+  const canGoPrevious = pageIndex > 0;
+  const canGoNext = pageIndex < totalPages - 1;
+
   useEffect(() => {
     latestProgressRef.current = { pageIndex, artStyle };
   }, [pageIndex, artStyle]);
@@ -538,6 +549,23 @@ export default function StoryReaderScreen({ navigation, route }) {
         <Text style={styles.closeText}>✕</Text>
       </TouchableOpacity>
 
+      <View style={styles.pageControls}>
+        <TouchableOpacity
+          style={[styles.pageControlButton, !canGoPrevious && styles.pageControlButtonDisabled]}
+          disabled={!canGoPrevious}
+          onPress={() => scrollToPage(pageIndex - 1)}
+        >
+          <Text style={styles.pageControlText}>Previous</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.pageControlButton, !canGoNext && styles.pageControlButtonDisabled]}
+          disabled={!canGoNext}
+          onPress={() => scrollToPage(pageIndex + 1)}
+        >
+          <Text style={styles.pageControlText}>Next</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Swipeable pages */}
       <AnimatedFlatList
         ref={listRef}
@@ -648,6 +676,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#A78BFA",
+  },
+  pageControls: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 16,
+    zIndex: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pageControlButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: "rgba(167,139,250,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.3)",
+  },
+  pageControlButtonDisabled: {
+    opacity: 0.35,
+  },
+  pageControlText: {
+    color: "#F5F3FF",
+    fontSize: 13,
+    fontWeight: "600",
   },
 
   pageScroller: { flex: 1 },
