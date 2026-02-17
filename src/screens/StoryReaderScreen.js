@@ -20,8 +20,12 @@ import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGene
 // Create AnimatedFlatList OUTSIDE component to maintain stable identity
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
+const BG_TWILIGHT = "#241A3A";
+const PAPER = "#F7F3EA";
+const INK = "#1E1B2E";
+
 export default function StoryReaderScreen({ navigation, route }) {
-  const { story, selectedChild } = route?.params || {};
+  const { story, selectedChild, artStyle } = route?.params || {};
 
   // Story context for prompt continuity
   const storyContext = {
@@ -88,17 +92,9 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [loadingImages, setLoadingImages] = useState({});
   const [failedImages, setFailedImages] = useState({});
   const [imageOpacity] = useState({});
-  const [artStyle, setArtStyle] = useState("magical");
   const [pendingStyle, setPendingStyle] = useState(artStyle);
   const [isInteracting, setIsInteracting] = useState(false);
   const styleDebounceRef = React.useRef(null);
-
-  const ART_STYLES = [
-    { key: "magical", label: "✨ Magical" },
-    { key: "bold_adventure", label: "🐉 Bold" },
-    { key: "cozy", label: "🏠 Cozy" },
-    { key: "classic", label: "📖 Classic" },
-  ];
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
@@ -392,40 +388,6 @@ export default function StoryReaderScreen({ navigation, route }) {
         <Text style={styles.progress}>
           {pageIndex + 1} of {totalPages}
         </Text>
-      </View>
-
-      {/* Art style selector */}
-      <View style={styles.styleSelector}>
-        {ART_STYLES.map((style) => (
-          <TouchableOpacity
-            key={style.key}
-            style={[
-              styles.styleButton,
-              pendingStyle === style.key && styles.styleButtonActive,
-            ]}
-            onPress={() => handleStylePress(style.key)}
-          >
-            <Text
-              style={[
-                styles.styleButtonText,
-                pendingStyle === style.key && styles.styleButtonTextActive,
-              ]}
-            >
-              {style.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {/* Small shimmer/feedback when style-specific image is loading */}
-        {(() => {
-          const kCurr = keyFor(pageIndex, artStyle);
-          const isUpdating = !pageImages[kCurr] && loadingImages[kCurr];
-          if (!isUpdating) return null;
-          return (
-            <View style={styles.styleUpdatingBadge}>
-              <Text style={styles.styleUpdatingText}>Updating style…</Text>
-            </View>
-          );
-        })()}
       </View>
 
       {/* Close button overlay (top-right) */}
