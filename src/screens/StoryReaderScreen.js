@@ -7,6 +7,8 @@ import {
   useWindowDimensions,
   FlatList,
   Platform,
+  Alert,
+  BackHandler,
   Image,
   Animated,
   ActivityIndicator,
@@ -151,6 +153,29 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
+
+  const requestExitReader = React.useCallback(() => {
+    if (pageIndex === 0) {
+      navigation.goBack();
+      return;
+    }
+
+    Alert.alert("Leave story?", "Your place is saved.", [
+      { text: "Stay", style: "cancel" },
+      { text: "Leave", onPress: () => navigation.goBack() },
+    ]);
+  }, [navigation, pageIndex]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const backSub = BackHandler.addEventListener("hardwareBackPress", () => {
+      requestExitReader();
+      return true;
+    });
+
+    return () => backSub.remove();
+  }, [requestExitReader]);
 
   const retryImageForPage = (index, promptText) => {
     const k = keyFor(index, artStyle);
@@ -508,7 +533,7 @@ export default function StoryReaderScreen({ navigation, route }) {
       {/* Close button overlay (top-right) */}
       <TouchableOpacity
         style={styles.closeBtn}
-        onPress={() => navigation.goBack()}
+        onPress={requestExitReader}
       >
         <Text style={styles.closeText}>✕</Text>
       </TouchableOpacity>
