@@ -35,11 +35,9 @@ export default function StoryReaderScreen({ navigation, route }) {
     settingHint: story?.setting ?? null,
   };
 
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
-
-  // Explicit page width for paging calculations
-  const PAGE_W = Dimensions.get("window").width;
+  const { width: SCREEN_W, height } = useWindowDimensions();
+  const isLandscape = SCREEN_W > height;
+  const PAGE_W = SCREEN_W;
 
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -246,14 +244,8 @@ export default function StoryReaderScreen({ navigation, route }) {
     });
 
     return (
-      <View style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: BG_TWILIGHT,
-      }}>
+      <View style={{ width: PAGE_W, flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: BG_TWILIGHT }}>
         <View style={{
-          width: PAGE_W * 0.92,
           minHeight: isLandscape ? 320 : 420,
           backgroundColor: PAPER,
           borderRadius: 24,
@@ -267,6 +259,7 @@ export default function StoryReaderScreen({ navigation, route }) {
           padding: isLandscape ? 24 : 20,
           flexDirection: isLandscape ? "row" : "column",
           gap: 24,
+          width: "92%", // inner paper width, not outer
         }}>
           {isLandscape ? (
             <View style={{ flex: 1, justifyContent: "center" }}>
@@ -338,7 +331,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={{ flex: 1, backgroundColor: BG_TWILIGHT }}>
       <StatusBar hidden />
 
       {/* Title and page indicator (subtle overlay, top-left) */}
@@ -361,13 +354,15 @@ export default function StoryReaderScreen({ navigation, route }) {
       <AnimatedFlatList
         data={pages}
         horizontal
-        pagingEnabled
         snapToInterval={PAGE_W}
+        snapToAlignment="start"
         decelerationRate="fast"
+        pagingEnabled={false}
         showsHorizontalScrollIndicator={false}
         keyExtractor={(_, i) => String(i)}
         renderItem={renderPage}
         style={styles.pageScroller}
+        getItemLayout={(_, index) => ({ length: PAGE_W, offset: PAGE_W * index, index })}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: true }
