@@ -1,9 +1,11 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function StoryDetailsScreen({ navigation, route }) {
   const { story, selectedChild } = route?.params || {};
   const [artStyle, setArtStyle] = useState("magical");
+  const [resumePageIndex, setResumePageIndex] = useState(null);
 
   const ART_STYLES = [
     { key: "magical", label: "✨ Magical" },
@@ -12,8 +14,65 @@ export default function StoryDetailsScreen({ navigation, route }) {
     { key: "classic", label: "📖 Classic" },
   ];
 
+  const progressStorageKey = React.useMemo(() => {
+    const storyId =
+      story?.id != null && String(story.id).trim()
+        ? String(story.id).trim()
+        : typeof story?.title === "string" && story.title.trim()
+        ? story.title.trim()
+        : "unknown";
+
+    let childId = "unknown";
+    if (selectedChild && typeof selectedChild === "object") {
+      if (selectedChild.id != null && String(selectedChild.id).trim()) {
+        childId = String(selectedChild.id).trim();
+      } else if (typeof selectedChild.name === "string" && selectedChild.name.trim()) {
+        childId = selectedChild.name.trim();
+      }
+    } else if (typeof selectedChild === "string" && selectedChild.trim()) {
+      childId = selectedChild.trim();
+    }
+
+    return `readerProgress:${storyId}:${childId}`;
+  }, [story?.id, story?.title, selectedChild]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProgress = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(progressStorageKey);
+        if (!raw) {
+          if (!cancelled) setResumePageIndex(null);
+          return;
+        }
+
+        const parsed = JSON.parse(raw);
+        const savedPageIndex = Number(parsed?.pageIndex);
+        if (!Number.isFinite(savedPageIndex) || savedPageIndex < 0) {
+          if (!cancelled) setResumePageIndex(null);
+          return;
+        }
+
+        if (!cancelled) setResumePageIndex(Math.floor(savedPageIndex));
+      } catch {
+        if (!cancelled) setResumePageIndex(null);
+      }
+    };
+
+    loadProgress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [progressStorageKey]);
+
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.containerContent}
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={styles.title}>{story?.title || "Story"}</Text>
       <Text style={styles.subtitle}>
         {selectedChild ? `A story for ${selectedChild}` : "A story for you"}
@@ -36,6 +95,16 @@ export default function StoryDetailsScreen({ navigation, route }) {
           ))}
         </View>
       </View>
+      {resumePageIndex != null && (
+        <TouchableOpacity
+          style={styles.resumeButton}
+          onPress={() =>
+            navigation.navigate("StoryReader", { story, selectedChild, artStyle })
+          }
+        >
+          <Text style={styles.resumeText}>Resume from page {resumePageIndex + 1}</Text>
+        </TouchableOpacity>
+      )}
       <TouchableOpacity
         style={styles.primaryButton}
         onPress={() =>
@@ -47,7 +116,7 @@ export default function StoryDetailsScreen({ navigation, route }) {
       <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
         <Text style={styles.secondaryText}>Back to Stories</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -55,7 +124,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#241A3A",
-    padding: 24,
+    paddingHorizontal: 24,
+  },
+  containerContent: {
+    flexGrow: 1,
+    paddingVertical: 24,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -78,6 +151,23 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "500",
     letterSpacing: 0.1,
+  },
+  resumeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    alignItems: "center",
+    backgroundColor: "rgba(167,139,250,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.4)",
+    marginBottom: 14,
+  },
+  resumeText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#F4F1FF",
+    opacity: 0.9,
+    letterSpacing: 0.15,
   },
   primaryButton: {
     paddingVertical: 16,

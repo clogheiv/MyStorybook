@@ -1,15 +1,96 @@
 /**
  * Image generation utility for story illustrations.
  *
- * Currently uses deterministic Picsum placeholder.
+ * Uses real image API when configured, with deterministic story-safe fallback cards.
  * Easy drop-in replacement for:
  * - OpenAI DALL-E
  * - Stability AI
  * - Replicate
  * - Local ML model
  *
- * TODO: Wire real image generation API here
+ * Set EXPO_PUBLIC_IMAGE_API_URL to enable remote generation.
+ * Supported forms:
+ * - POST endpoint returning JSON with imageUrl/url
+ * - URL template with "{prompt}" token for direct image services
  */
+
+const ILLUSTRATIONS_ENABLED =
+  String(process?.env?.EXPO_PUBLIC_ILLUSTRATIONS_ENABLED || "")
+    .trim()
+    .toLowerCase() === "true";
+const IMAGE_API_URL =
+  typeof process?.env?.EXPO_PUBLIC_IMAGE_API_URL === "string"
+    ? process.env.EXPO_PUBLIC_IMAGE_API_URL.trim()
+    : "";
+const IMAGE_API_KEY =
+  typeof process?.env?.EXPO_PUBLIC_IMAGE_API_KEY === "string"
+    ? process.env.EXPO_PUBLIC_IMAGE_API_KEY.trim()
+    : "";
+
+const HERO_KEYWORD_MAP = [
+  { keyword: "turtle", name: "brave little turtle", emoji: "🐢" },
+  { keyword: "rabbit", name: "curious rabbit", emoji: "🐇" },
+  { keyword: "bunny", name: "curious rabbit", emoji: "🐇" },
+  { keyword: "bear", name: "gentle bear cub", emoji: "🐻" },
+  { keyword: "fox", name: "friendly little fox", emoji: "🦊" },
+  { keyword: "dragon", name: "gentle baby dragon", emoji: "🐉" },
+];
+
+const SCENE_KEYWORD_MAP = [
+  { keywords: ["turtle"], emoji: "🐢" },
+  { keywords: ["rabbit", "bunny"], emoji: "🐇" },
+  { keywords: ["forest", "woods", "trees", "tree"], emoji: "🌲" },
+  { keywords: ["pond", "water", "river"], emoji: "🌊" },
+  { keywords: ["night", "moon"], emoji: "🌙" },
+  { keywords: ["adventure"], emoji: "🧭" },
+];
+
+function findFirstMatch(text, matchers) {
+  return matchers.find((matcher) => {
+    if (typeof matcher.keyword === "string") {
+      return text.includes(matcher.keyword);
+    }
+    if (Array.isArray(matcher.keywords)) {
+      return matcher.keywords.some((keyword) => text.includes(keyword));
+    }
+    return false;
+  });
+}
+
+function inferHeroName(prompt, storyTitle) {
+  const fromPrompt = String(prompt || "").match(/main character:\s*([^.\n]+)/i);
+  if (fromPrompt && fromPrompt[1]) {
+    const cleaned = fromPrompt[1].trim();
+    if (cleaned) return cleaned;
+  }
+
+  const corpus = `${storyTitle || ""} ${prompt || ""}`.toLowerCase();
+  const matchedHero = findFirstMatch(corpus, HERO_KEYWORD_MAP);
+  return matchedHero?.name || "young storybook hero";
+}
+
+function inferHeroEmoji(heroName, prompt, storyTitle) {
+  const corpus = `${heroName || ""} ${storyTitle || ""} ${prompt || ""}`.toLowerCase();
+  const matchedHero = findFirstMatch(corpus, HERO_KEYWORD_MAP);
+  return matchedHero?.emoji || "🧒";
+}
+
+function inferSceneEmoji(prompt, storyTitle) {
+  const corpus = `${storyTitle || ""} ${prompt || ""}`.toLowerCase();
+  const matchedScene = findFirstMatch(corpus, SCENE_KEYWORD_MAP);
+  return matchedScene?.emoji || "⭐";
+}
+
+function buildPlaceholderToken(prompt, storyTitle, artStyle, storyId, childId, pageIndex) {
+  const seed = `${storyId}:${childId}:${artStyle}:${pageIndex}`;
+  const payload = {
+    heroName: inferHeroName(prompt, storyTitle),
+    heroEmoji: inferHeroEmoji("", prompt, storyTitle),
+    sceneEmoji: inferSceneEmoji(prompt, storyTitle),
+    seed,
+  };
+  return `__placeholder__:${encodeURIComponent(JSON.stringify(payload))}`;
+}
 
 /**
  * Build a structured illustration prompt from story context.
@@ -100,43 +181,102 @@ function buildIllustrationPrompt({
  * @param {string} prompt - Detailed prompt describing the scene (from buildIllustrationPrompt)
  * @param {string} storyTitle - Title of the story (context)
  * @param {string} artStyle - Art style theme (magical, bold_adventure, cozy, classic)
+ * @param {Object} [options] - Optional context for deterministic placeholders
+ * @param {string} [options.storyId] - Story identifier
+ * @param {string} [options.childId] - Child identifier
+ * @param {number} [options.pageIndex] - Zero-based page index
+ * @param {string} [options.gender] - Optional child gender hint
  * @returns {Promise<string>} Image URL
  */
 async function generateImageFromAI(
   prompt,
   storyTitle,
-  artStyle = "magical"
+  artStyle = "magical",
+  options = {}
 ) {
+  const { storyId, childId, pageIndex, gender } = options;
+  const safeStoryId =
+    storyId != null && String(storyId).trim() ? String(storyId).trim() : "unknown";
+  const safeChildId =
+    childId != null && String(childId).trim() ? String(childId).trim() : "unknown";
+  const safePageIndex = Number.isFinite(Number(pageIndex)) ? Number(pageIndex) : 0;
+  const fallbackToPlaceholder = (err) => {
+    const returnedValue = buildPlaceholderToken(
+      prompt,
+      storyTitle,
+      artStyle,
+      safeStoryId,
+      safeChildId,
+      safePageIndex
+    );
+    console.log("[generateImageFromAI] FALLBACK_TO_PLACEHOLDER", {
+      reason: err?.message ?? err ?? null,
+    });
+    return returnedValue;
+  };
+
+  if (!ILLUSTRATIONS_ENABLED) {
+    return fallbackToPlaceholder("ILLUSTRATIONS_DISABLED");
+  }
+
   try {
-    // TODO: Replace with real API call
-    // Example:
-    // const response = await fetch('https://api.openai.com/v1/images/generations', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     prompt: prompt,
-    //     model: 'dall-e-3',
-    //     size: '1024x768',
-    //     n: 1,
-    //   }),
-    // });
-    // const data = await response.json();
-    // return data.data[0].url;
+    if (!IMAGE_API_URL) {
+      return fallbackToPlaceholder("REMOTE_FAILED");
+    }
 
-    // For now: Deterministic placeholder using prompt as seed
-    // This ensures the same prompt always produces the same "magical" image
-    const seed = encodeURIComponent(prompt);
-    const imageUrl = `https://picsum.photos/seed/${seed}/600/400?blur=1`;
+    if (IMAGE_API_URL.includes("{prompt}")) {
+      const templateImageUrl = IMAGE_API_URL.replace(
+        "{prompt}",
+        encodeURIComponent(String(prompt || "").slice(0, 1200))
+      );
+      const templateResponse = await fetch(templateImageUrl);
+      if (!templateResponse.ok) {
+        throw new Error(`Template image endpoint failed (${templateResponse.status})`);
+      }
+      const templateContentType = templateResponse.headers.get("content-type") || "";
+      if (templateContentType && !templateContentType.startsWith("image/")) {
+        throw new Error(`Template endpoint returned non-image content type: ${templateContentType}`);
+      }
+      return templateImageUrl;
+    }
 
-    return imageUrl;
-  } catch (error) {
-    console.error("Image generation failed:", error);
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    if (IMAGE_API_KEY) {
+      headers.Authorization = `Bearer ${IMAGE_API_KEY}`;
+    }
 
-    // Fallback: Generic placeholder so reader never breaks
-    return `https://picsum.photos/600/400?random=${Date.now()}`;
+    const response = await fetch(IMAGE_API_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        prompt,
+        storyTitle,
+        artStyle,
+        storyId: safeStoryId,
+        childId: safeChildId,
+        pageIndex: safePageIndex,
+        gender: gender ?? "neutral",
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Image API request failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    const imageUrl = data?.imageUrl || data?.url || data?.data?.[0]?.url;
+    if (typeof imageUrl !== "string" || !imageUrl.trim()) {
+      throw new Error("Image API response missing image URL");
+    }
+    const trimmedImageUrl = imageUrl.trim();
+    if (!/^https?:\/\//i.test(trimmedImageUrl)) {
+      throw new Error("Image API returned non-http(s) URL");
+    }
+
+    return trimmedImageUrl;
+  } catch {
+    return fallbackToPlaceholder("REMOTE_FAILED");
   }
 }
 

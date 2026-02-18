@@ -42,9 +42,9 @@ export default function StoryPickerScreen({ navigation, route }) {
 
       <FlatList
         data={stories}
+        style={styles.list}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        scrollEnabled={false}
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() => openStory(item)}
@@ -81,9 +81,12 @@ const styles = StyleSheet.create({
     opacity: 0.75,
     letterSpacing: 0.2,
   },
+  list: {
+    flex: 1,
+  },
   listContent: {
     gap: 18,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
   storyCard: {
     backgroundColor: "#2F234F",

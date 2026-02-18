@@ -13,11 +13,13 @@ import {
   Image,
   Animated,
   ActivityIndicator,
-  Dimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
+import * as Haptics from "expo-haptics";
+import { useFonts } from "expo-font";
+import { Nunito_400Regular } from "@expo-google-fonts/nunito";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
 
@@ -35,10 +37,133 @@ const DEMO_PAGES = [
   "The turtle smiled and replied, \"Because I like to notice things others rush past.\"",
   "By nightfall, the turtle felt brave. Not because it was fast, but because it kept taking the next small step.",
 ];
+const PLACEHOLDER_TOKEN_PREFIX = "__placeholder__:";
+
+const inferVisualAnchor = (story) => {
+  const titleText = typeof story?.title === "string" ? story.title : "";
+  const mainCharacterText =
+    typeof story?.mainCharacter === "string" && story.mainCharacter.trim()
+      ? story.mainCharacter.trim()
+      : null;
+  const firstPageText = Array.isArray(story?.pages)
+    ? story.pages
+        .slice(0, 2)
+        .map((page) => {
+          if (typeof page === "string") return page;
+          if (page && typeof page === "object" && typeof page.text === "string") {
+            return page.text;
+          }
+          return "";
+        })
+        .join(" ")
+    : "";
+  const corpus = `${titleText} ${firstPageText}`.toLowerCase();
+
+  const keywordProfiles = [
+    {
+      keyword: "turtle",
+      character: "brave little turtle",
+      secondary: "curious rabbit",
+      setting: "gentle outdoor nature scenes",
+    },
+    {
+      keyword: "rabbit",
+      character: "curious rabbit",
+      secondary: "kind forest friend",
+      setting: "soft woodland clearings",
+    },
+    {
+      keyword: "fox",
+      character: "friendly young fox",
+      secondary: "playful woodland friend",
+      setting: "warm forest paths at golden hour",
+    },
+    {
+      keyword: "dragon",
+      character: "small gentle dragon",
+      secondary: "brave child companion",
+      setting: "cozy fantasy hills and skies",
+    },
+    {
+      keyword: "bear",
+      character: "gentle bear cub",
+      secondary: "supportive woodland friend",
+      setting: "calm forest meadows",
+    },
+  ];
+
+  const matchedProfile = keywordProfiles.find(({ keyword }) => corpus.includes(keyword));
+  const mainCharacter = mainCharacterText || matchedProfile?.character || "kind young adventurer";
+  const secondaryCharacter = matchedProfile?.secondary || "supportive friend";
+  const setting = matchedProfile?.setting || "calm storybook scenes with soft natural light";
+
+  return `Main character: ${mainCharacter}. Secondary character: ${secondaryCharacter}. Setting: ${setting}. Character continuity: keep appearances consistent across pages.`;
+};
+
+const parsePlaceholderPayload = (uri) => {
+  if (typeof uri !== "string" || !uri.startsWith(PLACEHOLDER_TOKEN_PREFIX)) {
+    return null;
+  }
+
+  const rawPayload = uri.slice(PLACEHOLDER_TOKEN_PREFIX.length).split("?")[0];
+  try {
+    const parsed = JSON.parse(decodeURIComponent(rawPayload));
+    return {
+      heroName: typeof parsed?.heroName === "string" ? parsed.heroName : "young storybook hero",
+      heroEmoji: typeof parsed?.heroEmoji === "string" ? parsed.heroEmoji : "🧒",
+      sceneEmoji: typeof parsed?.sceneEmoji === "string" ? parsed.sceneEmoji : "⭐",
+      seed: typeof parsed?.seed === "string" ? parsed.seed : "unknown",
+    };
+  } catch {
+    return {
+      heroName: "young storybook hero",
+      heroEmoji: "🧒",
+      sceneEmoji: "⭐",
+      seed: "unknown",
+    };
+  }
+};
+
+const seedPalette = (seed) => {
+  const palettes = [
+    { background: "#EEE6D2", blobA: "rgba(189, 170, 120, 0.28)", blobB: "rgba(117, 151, 139, 0.20)" },
+    { background: "#E5ECF2", blobA: "rgba(120, 153, 189, 0.24)", blobB: "rgba(160, 145, 194, 0.20)" },
+    { background: "#EDE7D8", blobA: "rgba(174, 144, 111, 0.24)", blobB: "rgba(121, 158, 132, 0.20)" },
+    { background: "#E8E6EF", blobA: "rgba(138, 132, 188, 0.24)", blobB: "rgba(115, 162, 160, 0.20)" },
+  ];
+
+  const safeSeed = String(seed || "");
+  let hash = 0;
+  for (let i = 0; i < safeSeed.length; i += 1) {
+    hash = (hash * 31 + safeSeed.charCodeAt(i)) >>> 0;
+  }
+  return palettes[hash % palettes.length];
+};
+
+function PlaceholderIllustration({ payload }) {
+  const palette = seedPalette(payload?.seed);
+
+  return (
+    <View pointerEvents="none" style={[styles.placeholderCard, { backgroundColor: palette.background }]}>
+      <View style={[styles.placeholderBlob, styles.placeholderBlobTop, { backgroundColor: palette.blobA }]} />
+      <View style={[styles.placeholderBlob, styles.placeholderBlobBottom, { backgroundColor: palette.blobB }]} />
+      <Text style={styles.placeholderHeroEmoji}>{payload?.heroEmoji || "🧒"}</Text>
+      <View style={styles.placeholderSceneBadge}>
+        <Text style={styles.placeholderSceneEmoji}>{payload?.sceneEmoji || "⭐"}</Text>
+      </View>
+      <Text numberOfLines={1} style={styles.placeholderHeroLabel}>
+        {payload?.heroName || "young storybook hero"}
+      </Text>
+    </View>
+  );
+}
 
 export default function StoryReaderScreen({ navigation, route }) {
   // All hooks must be at the top level, in the same order every render
   const { story, selectedChild, artStyle } = route?.params || {};
+  const [fontsLoaded] = useFonts({
+    Nunito: Nunito_400Regular,
+  });
 
   // Story context for prompt continuity
   const storyContext = {
@@ -48,9 +173,8 @@ export default function StoryReaderScreen({ navigation, route }) {
     settingHint: story?.setting ?? null,
   };
 
-  const { width: SCREEN_W, height } = useWindowDimensions();
-  const isLandscape = SCREEN_W > height;
-  const PAGE_W = SCREEN_W;
+  const { width: pageWidth, height } = useWindowDimensions();
+  const isLandscape = pageWidth > height;
 
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -119,26 +243,34 @@ export default function StoryReaderScreen({ navigation, route }) {
   );
 
   const [pageIndex, setPageIndex] = useState(0);
+  const [initialIndex, setInitialIndex] = useState(0);
   const totalPages = pages.length;
   const progressRatio = totalPages > 0 ? (pageIndex + 1) / totalPages : 0;
 
   const [pageImages, setPageImages] = useState({});
   const [loadingImages, setLoadingImages] = useState({});
   const [failedImages, setFailedImages] = useState({});
+  const [visualAnchor, setVisualAnchor] = useState("");
   const [imageOpacity] = useState({});
   const [progressTrackWidth, setProgressTrackWidth] = useState(0);
   const progressAnim = useRef(new Animated.Value(progressRatio)).current;
-  const controlsOpacity = useRef(new Animated.Value(1)).current;
+  const uiOpacity = useRef(new Animated.Value(1)).current;
   const listRef = useRef(null);
   const listHasLayoutRef = useRef(false);
   const pendingRestoreIndexRef = useRef(null);
+  const hasSnappedAfterLayoutRef = useRef(false);
+  const didUserDragRef = useRef(false);
+  const touchStartRef = useRef({ x: 0, y: 0 });
+  const touchMovedRef = useRef(false);
+  const suppressNextToggleRef = useRef(false);
   const saveDebounceRef = useRef(null);
-  const controlsFadeTimerRef = useRef(null);
-  const isMomentumScrollingRef = useRef(false);
+  const uiHideTimerRef = useRef(null);
+  const isUiVisibleRef = useRef(true);
   const hasRestoredProgressRef = useRef(false);
   const latestProgressRef = useRef({ pageIndex: 0, artStyle });
+  const inferredVisualAnchor = React.useMemo(() => inferVisualAnchor(story), [story]);
 
-  const progressStorageKey = React.useMemo(() => {
+  const readerIdentity = React.useMemo(() => {
     const storyId =
       story?.id != null && String(story.id).trim()
         ? String(story.id).trim()
@@ -157,8 +289,16 @@ export default function StoryReaderScreen({ navigation, route }) {
       childId = selectedChild.trim();
     }
 
-    return `readerProgress:${storyId}:${childId}`;
+    return { storyId, childId };
   }, [story?.id, story?.title, selectedChild]);
+  const progressStorageKey = React.useMemo(
+    () => `readerProgress:${readerIdentity.storyId}:${readerIdentity.childId}`,
+    [readerIdentity]
+  );
+  const visualStorageKey = React.useMemo(
+    () => `visualAnchor:${readerIdentity.storyId}:${readerIdentity.childId}:${artStyle}`,
+    [readerIdentity, artStyle]
+  );
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
@@ -204,7 +344,9 @@ export default function StoryReaderScreen({ navigation, route }) {
     setLoadingImages((prev) => ({ ...prev, [k]: true }));
 
     if (promptText) {
-      generateImageForPage(index, promptText, {
+      const anchorText = visualAnchor || inferredVisualAnchor;
+      const anchoredPrompt = anchorText ? `${anchorText}\nScene: ${promptText}` : promptText;
+      generateImageForPage(index, anchoredPrompt, {
         force: true,
         retryNonce: Date.now(),
       });
@@ -216,7 +358,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   const scrollToPage = (targetIndex) => {
     if (targetIndex < 0 || targetIndex > totalPages - 1) return;
     listRef.current?.scrollToOffset({
-      offset: targetIndex * PAGE_W,
+      offset: targetIndex * pageWidth,
       animated: true,
     });
   };
@@ -230,56 +372,102 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     requestAnimationFrame(() => {
       listRef.current?.scrollToOffset({
-        offset: restoreIndex * PAGE_W,
+        offset: restoreIndex * pageWidth,
         animated: false,
       });
       pendingRestoreIndexRef.current = null;
     });
-  }, [PAGE_W]);
+  }, [pageWidth]);
 
   const handleListLayout = React.useCallback(() => {
     listHasLayoutRef.current = true;
-    applyPendingRestoreScroll();
-  }, [applyPendingRestoreScroll]);
 
-  const fadeControlsTo = React.useCallback(
+    if (!hasSnappedAfterLayoutRef.current) {
+      const maxIndex = Math.max(totalPages - 1, 0);
+      const targetIndex = Math.min(Math.max(pageIndex, 0), maxIndex);
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({
+          offset: targetIndex * pageWidth,
+          animated: false,
+        });
+      });
+      hasSnappedAfterLayoutRef.current = true;
+    }
+
+    applyPendingRestoreScroll();
+  }, [applyPendingRestoreScroll, pageIndex, pageWidth, totalPages]);
+
+  useEffect(() => {
+    hasSnappedAfterLayoutRef.current = false;
+  }, [pageWidth]);
+
+  useEffect(() => {
+    const clampedIndex = totalPages > 0
+      ? Math.min(Math.max(pageIndex, 0), totalPages - 1)
+      : 0;
+    setInitialIndex((prev) => (prev === clampedIndex ? prev : clampedIndex));
+  }, [pageIndex, totalPages]);
+
+  const fadeUiTo = React.useCallback(
     (toValue, duration) => {
-      Animated.timing(controlsOpacity, {
+      Animated.timing(uiOpacity, {
         toValue,
         duration,
         useNativeDriver: true,
       }).start();
     },
-    [controlsOpacity]
+    [uiOpacity]
   );
 
-  const hideControlsDuringInteraction = React.useCallback(() => {
-    if (controlsFadeTimerRef.current) {
-      clearTimeout(controlsFadeTimerRef.current);
-      controlsFadeTimerRef.current = null;
-    }
-    fadeControlsTo(0, 150);
-  }, [fadeControlsTo]);
-
-  const scheduleControlsFadeIn = React.useCallback(() => {
-    if (controlsFadeTimerRef.current) {
-      clearTimeout(controlsFadeTimerRef.current);
+  const scheduleUiAutoHide = React.useCallback(() => {
+    if (uiHideTimerRef.current) {
+      clearTimeout(uiHideTimerRef.current);
     }
 
-    controlsFadeTimerRef.current = setTimeout(() => {
-      fadeControlsTo(1, 200);
-      controlsFadeTimerRef.current = null;
-    }, 1000);
-  }, [fadeControlsTo]);
+    uiHideTimerRef.current = setTimeout(() => {
+      isUiVisibleRef.current = false;
+      fadeUiTo(0, 260);
+      uiHideTimerRef.current = null;
+    }, 3500);
+  }, [fadeUiTo]);
+
+  const registerUiInteraction = React.useCallback(() => {
+    isUiVisibleRef.current = true;
+    fadeUiTo(1, 280);
+    scheduleUiAutoHide();
+  }, [fadeUiTo, scheduleUiAutoHide]);
+
+  const toggleControls = React.useCallback(() => {
+    if (uiHideTimerRef.current) {
+      clearTimeout(uiHideTimerRef.current);
+      uiHideTimerRef.current = null;
+    }
+
+    if (isUiVisibleRef.current) {
+      isUiVisibleRef.current = false;
+      fadeUiTo(0, 280);
+      return;
+    }
+
+    isUiVisibleRef.current = true;
+    fadeUiTo(1, 280);
+    scheduleUiAutoHide();
+  }, [fadeUiTo, scheduleUiAutoHide]);
 
   useEffect(() => {
+    scheduleUiAutoHide();
     return () => {
-      if (controlsFadeTimerRef.current) {
-        clearTimeout(controlsFadeTimerRef.current);
-        controlsFadeTimerRef.current = null;
+      if (uiHideTimerRef.current) {
+        clearTimeout(uiHideTimerRef.current);
+        uiHideTimerRef.current = null;
       }
     };
-  }, []);
+  }, [scheduleUiAutoHide]);
+
+  useEffect(() => {
+    if (!isUiVisibleRef.current) return;
+    scheduleUiAutoHide();
+  }, [pageIndex, scheduleUiAutoHide]);
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -299,6 +487,7 @@ export default function StoryReaderScreen({ navigation, route }) {
     hasRestoredProgressRef.current = false;
     listHasLayoutRef.current = false;
     pendingRestoreIndexRef.current = null;
+    hasSnappedAfterLayoutRef.current = false;
 
     const loadProgress = async () => {
       try {
@@ -315,6 +504,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
         if (cancelled) return;
         setPageIndex(clampedIndex);
+        setInitialIndex(clampedIndex);
         pendingRestoreIndexRef.current = clampedIndex;
         applyPendingRestoreScroll();
 
@@ -334,6 +524,39 @@ export default function StoryReaderScreen({ navigation, route }) {
       cancelled = true;
     };
   }, [progressStorageKey, applyPendingRestoreScroll]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOrCreateVisualAnchor = async () => {
+      try {
+        const savedAnchor = await AsyncStorage.getItem(visualStorageKey);
+        if (cancelled) return;
+
+        if (typeof savedAnchor === "string" && savedAnchor.trim()) {
+          setVisualAnchor(savedAnchor.trim());
+          return;
+        }
+
+        const generatedAnchor = inferredVisualAnchor;
+        await AsyncStorage.setItem(visualStorageKey, generatedAnchor);
+        if (!cancelled) {
+          setVisualAnchor(generatedAnchor);
+        }
+      } catch (error) {
+        console.warn("Failed to load visual anchor", error);
+        if (!cancelled) {
+          setVisualAnchor(inferredVisualAnchor);
+        }
+      }
+    };
+
+    loadOrCreateVisualAnchor();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visualStorageKey, inferredVisualAnchor]);
 
   // Debounced save whenever page index changes.
   useEffect(() => {
@@ -429,11 +652,22 @@ export default function StoryReaderScreen({ navigation, route }) {
       }
 
       // Call image generation (structured for easy real API swap)
-      const imageUrl = await generateImageFromAI(prompt, story?.title, artStyle);
+      const imageUrl = await generateImageFromAI(prompt, story?.title, artStyle, {
+        storyId: readerIdentity.storyId,
+        childId: readerIdentity.childId,
+        pageIndex: index,
+        gender:
+          selectedChild && typeof selectedChild === "object"
+            ? selectedChild.gender ?? "neutral"
+            : "neutral",
+      });
+      const isPlaceholderToken =
+        typeof imageUrl === "string" && imageUrl.startsWith(PLACEHOLDER_TOKEN_PREFIX);
       const resolvedUrl =
-        retryNonce != null
+        retryNonce != null && !isPlaceholderToken
           ? `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}retry=${retryNonce}`
           : imageUrl;
+      console.log("[IMG]", { index, artStyle, uri: resolvedUrl });
 
       setPageImages((prev) => ({ ...prev, [k]: resolvedUrl }));
       // clear failed flag on success
@@ -466,8 +700,12 @@ export default function StoryReaderScreen({ navigation, route }) {
     const k = keyFor(pageIndex, artStyle);
     const page = pages[pageIndex];
     const promptText = page?.prompt || page?.text;
+    const anchorText = visualAnchor || inferredVisualAnchor;
+    const anchoredPrompt = anchorText && promptText
+      ? `${anchorText}\nScene: ${promptText}`
+      : promptText;
     if (promptText && !pageImages[k] && !failedImages[k]) {
-      generateImageForPage(pageIndex, promptText);
+      generateImageForPage(pageIndex, anchoredPrompt);
     }
 
     // Pre-generate next page for instant feel (style-aware)
@@ -486,13 +724,16 @@ export default function StoryReaderScreen({ navigation, route }) {
       } else {
         const nextPage = pages[nextIndex];
         const nextPromptText = nextPage?.prompt || nextPage?.text;
+        const anchoredNextPrompt = anchorText && nextPromptText
+          ? `${anchorText}\nScene: ${nextPromptText}`
+          : nextPromptText;
         // Fire it but don't await (background fetch)
         if (nextPromptText) {
-          generateImageForPage(nextIndex, nextPromptText);
+          generateImageForPage(nextIndex, anchoredNextPrompt);
         }
       }
     }
-  }, [pageIndex, artStyle]);
+  }, [pageIndex, artStyle, visualAnchor, inferredVisualAnchor]);
 
   // Keep page index in-range when page source changes.
   useEffect(() => {
@@ -507,9 +748,21 @@ export default function StoryReaderScreen({ navigation, route }) {
   }, [pageIndex, totalPages]);
 
   const renderPage = ({ item, index }) => {
+    const pageOffset = index * pageWidth;
+    const leftEdgeOpacity = scrollX.interpolate({
+      inputRange: [(index - 1) * pageWidth, pageOffset, (index + 1) * pageWidth],
+      outputRange: [0, 0, 0.35],
+      extrapolate: "clamp",
+    });
+    const rightEdgeOpacity = scrollX.interpolate({
+      inputRange: [(index - 1) * pageWidth, pageOffset, (index + 1) * pageWidth],
+      outputRange: [0.35, 0, 0],
+      extrapolate: "clamp",
+    });
+
     return (
       <View style={{
-        width: PAGE_W,
+        width: pageWidth,
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
@@ -535,13 +788,15 @@ export default function StoryReaderScreen({ navigation, route }) {
           }}
         >
           {isLandscape ? (
-            <View style={{ flex: 1, justifyContent: "center" }}>
-              <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item?.text}</Text>
+            <View style={styles.leftPageTextContainer}>
+              <View style={styles.leftPageTextColumn}>
+                <Text style={[styles.storyText, fontsLoaded && styles.storyTextNunito]}>{item?.text}</Text>
+              </View>
             </View>
           ) : (
-            <Text style={{ fontSize: 17, lineHeight: 32, color: INK }}>{item?.text}</Text>
+            <Text style={[styles.storyText, fontsLoaded && styles.storyTextNunito]}>{item?.text}</Text>
           )}
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingLeft: isLandscape ? 16 : 0 }}>
             <View style={styles.illustrationBox}>
               {(() => {
                 const k = keyFor(index, artStyle);
@@ -550,6 +805,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                 const failed = failedImages[k];
                 const opacity = imageOpacity[k];
                 const promptText = item?.prompt || item?.text;
+                const placeholderPayload = parsePlaceholderPayload(img);
                 return (
                   <>
                     {loading && (
@@ -558,7 +814,10 @@ export default function StoryReaderScreen({ navigation, route }) {
                         <Text style={styles.loadingText}>Illustrating…</Text>
                       </View>
                     )}
-                    {img && (
+                    {img && placeholderPayload && (
+                      <PlaceholderIllustration payload={placeholderPayload} />
+                    )}
+                    {img && !placeholderPayload && (
                       <Animated.Image
                         source={{ uri: img }}
                         style={[{ width: "100%", height: "100%", borderRadius: 12 }, { opacity: opacity || 1 }]}
@@ -581,7 +840,11 @@ export default function StoryReaderScreen({ navigation, route }) {
                       <TouchableOpacity
                         style={styles.retryOverlay}
                         activeOpacity={0.85}
-                        onPress={() => retryImageForPage(index, promptText)}
+                        onPress={() => {
+                          suppressNextToggleRef.current = true;
+                          registerUiInteraction();
+                          retryImageForPage(index, promptText);
+                        }}
                       >
                         <Text style={styles.retryText}>Illustration failed to load. Tap to retry.</Text>
                       </TouchableOpacity>
@@ -592,16 +855,34 @@ export default function StoryReaderScreen({ navigation, route }) {
               })()}
             </View>
           </View>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.pageDepthEdge, styles.pageDepthLeft, { opacity: leftEdgeOpacity }]}
+          />
+          <View pointerEvents="none" style={styles.pageSpineBand} />
+          <View pointerEvents="none" style={styles.pageSpineCrease} />
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.pageDepthEdge, styles.pageDepthRight, { opacity: rightEdgeOpacity }]}
+          />
         </View>
         <View style={styles.tapZonesContainer} pointerEvents="box-none">
           <Pressable
             style={styles.tapZoneLeft}
-            onPress={() => scrollToPage(pageIndex - 1)}
+            onPress={() => {
+              suppressNextToggleRef.current = true;
+              registerUiInteraction();
+              scrollToPage(pageIndex - 1);
+            }}
             disabled={!canGoPrevious}
           />
           <Pressable
             style={styles.tapZoneRight}
-            onPress={() => scrollToPage(pageIndex + 1)}
+            onPress={() => {
+              suppressNextToggleRef.current = true;
+              registerUiInteraction();
+              scrollToPage(pageIndex + 1);
+            }}
             disabled={!canGoNext}
           />
         </View>
@@ -613,7 +894,7 @@ export default function StoryReaderScreen({ navigation, route }) {
     <View style={{ flex: 1, backgroundColor: BG_TWILIGHT }}>
       <StatusBar hidden />
 
-      <View style={styles.headerRow}>
+      <Animated.View style={[styles.headerRow, { opacity: uiOpacity }]}>
         <View style={styles.headerLeft}>
           <Text numberOfLines={1} style={[styles.title, { fontSize: 20, letterSpacing: 0.5 }]}>
             {story?.title || "Story"}
@@ -637,66 +918,99 @@ export default function StoryReaderScreen({ navigation, route }) {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.closeBtn} onPress={requestExitReader}>
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={() => {
+            registerUiInteraction();
+            requestExitReader();
+          }}
+        >
           <Text style={styles.closeText}>X</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      <Animated.View style={[styles.pageControls, { opacity: controlsOpacity }]}>
+      <Animated.View style={[styles.pageControls, { opacity: uiOpacity }]}>
         <TouchableOpacity
           style={[styles.pageControlButton, !canGoPrevious && styles.pageControlButtonDisabled]}
           disabled={!canGoPrevious}
-          onPress={() => scrollToPage(pageIndex - 1)}
+          onPress={() => {
+            registerUiInteraction();
+            scrollToPage(pageIndex - 1);
+          }}
         >
           <Text style={styles.pageControlText}>Previous</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.pageControlButton, !canGoNext && styles.pageControlButtonDisabled]}
           disabled={!canGoNext}
-          onPress={() => scrollToPage(pageIndex + 1)}
+          onPress={() => {
+            registerUiInteraction();
+            scrollToPage(pageIndex + 1);
+          }}
         >
           <Text style={styles.pageControlText}>Next</Text>
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Swipeable pages */}
-      <AnimatedFlatList
-        ref={listRef}
-        onLayout={handleListLayout}
-        data={pages}
-        horizontal
-        snapToInterval={PAGE_W}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        pagingEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(_, i) => String(i)}
-        renderItem={renderPage}
-        style={styles.pageScroller}
-        getItemLayout={(_, index) => ({ length: PAGE_W, offset: PAGE_W * index, index })}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
-        onScrollBeginDrag={hideControlsDuringInteraction}
-        onScrollEndDrag={() => {
-          if (!isMomentumScrollingRef.current) {
-            scheduleControlsFadeIn();
-          }
-        }}
-        onMomentumScrollBegin={() => {
-          isMomentumScrollingRef.current = true;
-          hideControlsDuringInteraction();
-        }}
-        onMomentumScrollEnd={(e) => {
-          isMomentumScrollingRef.current = false;
-          const w = e.nativeEvent.layoutMeasurement.width;
-          const i = Math.round(e.nativeEvent.contentOffset.x / w);
-          setPageIndex(i);
-          scheduleControlsFadeIn();
-        }}
-      />
+      <View style={styles.pageTapSurface}>
+        {/* Swipeable pages */}
+        <AnimatedFlatList
+          key={`reader-pages-${pageWidth}`}
+          ref={listRef}
+          onLayout={handleListLayout}
+          initialScrollIndex={initialIndex}
+          data={pages}
+          horizontal
+          snapToInterval={pageWidth}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          pagingEnabled={false}
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(_, i) => String(i)}
+          renderItem={renderPage}
+          style={styles.pageScroller}
+          getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+            { useNativeDriver: true }
+          )}
+          scrollEventThrottle={16}
+          onTouchStart={(e) => {
+            touchStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+            touchMovedRef.current = false;
+          }}
+          onTouchMove={(e) => {
+            const dx = Math.abs(e.nativeEvent.pageX - touchStartRef.current.x);
+            const dy = Math.abs(e.nativeEvent.pageY - touchStartRef.current.y);
+            if (dx > 10 || dy > 10) {
+              touchMovedRef.current = true;
+            }
+          }}
+          onTouchEnd={() => {
+            if (suppressNextToggleRef.current) {
+              suppressNextToggleRef.current = false;
+              return;
+            }
+            if (touchMovedRef.current) return;
+            toggleControls();
+          }}
+          onScrollBeginDrag={() => {
+            didUserDragRef.current = true;
+            registerUiInteraction();
+          }}
+          onScrollEndDrag={registerUiInteraction}
+          onMomentumScrollBegin={registerUiInteraction}
+          onMomentumScrollEnd={(e) => {
+            registerUiInteraction();
+            const i = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
+            if (didUserDragRef.current && i !== pageIndex) {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+            didUserDragRef.current = false;
+            setPageIndex(i);
+          }}
+        />
+      </View>
     </View>
   );
 }
@@ -834,20 +1148,22 @@ const styles = StyleSheet.create({
   },
 
   pageScroller: { flex: 1 },
+  pageTapSurface: { flex: 1 },
   page: { flex: 1 },
   tapZonesContainer: {
     ...StyleSheet.absoluteFillObject,
     top: 72,
     bottom: 0,
     zIndex: 1,
-    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "stretch",
   },
   tapZoneLeft: {
-    flex: 1,
+    width: "23%",
     backgroundColor: "transparent",
   },
   tapZoneRight: {
-    flex: 1,
+    width: "23%",
     backgroundColor: "transparent",
   },
 
@@ -868,10 +1184,36 @@ const styles = StyleSheet.create({
   rightPage: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   body: { fontSize: 17, lineHeight: 32, color: "#F5F3FF" },
+  leftPageTextContainer: {
+    flex: 1,
+    justifyContent: "flex-start",
+    paddingTop: 2,
+    paddingBottom: 0,
+    paddingLeft: 8,
+    paddingRight: 4,
+  },
+  leftPageTextColumn: {
+    flex: 1,
+    justifyContent: "flex-start",
+    maxWidth: "66%",
+    alignSelf: "flex-start",
+  },
+  storyText: {
+    fontSize: 22,
+    lineHeight: 34,
+    color: INK,
+    flexShrink: 1,
+    textAlign: "left",
+  },
+  storyTextNunito: {
+    fontFamily: "Nunito",
+  },
 
   illustrationBox: {
     width: "100%",
-    height: 180,
+    height: 220,
+    minHeight: 220,
+    maxHeight: 220,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.12)",
@@ -915,6 +1257,89 @@ const styles = StyleSheet.create({
     fontSize: 13,
     opacity: 0.5,
     textAlign: "center",
+  },
+  placeholderCard: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholderBlob: {
+    position: "absolute",
+    borderRadius: 999,
+  },
+  placeholderBlobTop: {
+    width: 130,
+    height: 130,
+    top: -34,
+    left: -22,
+  },
+  placeholderBlobBottom: {
+    width: 160,
+    height: 160,
+    right: -40,
+    bottom: -62,
+  },
+  placeholderHeroEmoji: {
+    fontSize: 74,
+    lineHeight: 84,
+  },
+  placeholderSceneBadge: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.48)",
+  },
+  placeholderSceneEmoji: {
+    fontSize: 20,
+  },
+  placeholderHeroLabel: {
+    position: "absolute",
+    left: 12,
+    right: 52,
+    bottom: 14,
+    fontSize: 11,
+    color: "rgba(30,27,46,0.56)",
+  },
+  pageDepthEdge: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 14,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.10)",
+  },
+  pageDepthLeft: {
+    left: 0,
+  },
+  pageDepthRight: {
+    right: 0,
+  },
+  pageSpineBand: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "50%",
+    width: 18,
+    marginLeft: -9,
+    backgroundColor: "rgba(0,0,0,0.03)",
+    borderRadius: 10,
+  },
+  pageSpineCrease: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "50%",
+    width: 2,
+    marginLeft: -1,
+    backgroundColor: "rgba(0,0,0,0.05)",
   },
 
   // Page-turn illusion overlays
