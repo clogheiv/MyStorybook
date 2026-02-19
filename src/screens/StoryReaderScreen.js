@@ -12,6 +12,7 @@ import {
   BackHandler,
   Image,
   Animated,
+  Easing,
   ActivityIndicator,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -27,7 +28,9 @@ import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGene
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
 const BG_TWILIGHT = "#241A3A";
-const PAPER = "#F3F0E6";
+const OUTER_BG = "#2F2B45";
+const READER_BACKDROP = "#F1EEE6";
+const PAGE_COLOR = "#F7F4ED";
 const INK = "#1E1B2E";
 
 const DEMO_PAGES = [
@@ -244,6 +247,8 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const [pageIndex, setPageIndex] = useState(0);
   const [initialIndex, setInitialIndex] = useState(0);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
   const totalPages = pages.length;
   const progressRatio = totalPages > 0 ? (pageIndex + 1) / totalPages : 0;
 
@@ -255,11 +260,11 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [progressTrackWidth, setProgressTrackWidth] = useState(0);
   const progressAnim = useRef(new Animated.Value(progressRatio)).current;
   const uiOpacity = useRef(new Animated.Value(1)).current;
+  const pageSettleAnim = useRef(new Animated.Value(1)).current;
   const listRef = useRef(null);
   const listHasLayoutRef = useRef(false);
   const pendingRestoreIndexRef = useRef(null);
   const hasSnappedAfterLayoutRef = useRef(false);
-  const didUserDragRef = useRef(false);
   const touchStartRef = useRef({ x: 0, y: 0 });
   const touchMovedRef = useRef(false);
   const suppressNextToggleRef = useRef(false);
@@ -267,7 +272,10 @@ export default function StoryReaderScreen({ navigation, route }) {
   const uiHideTimerRef = useRef(null);
   const isUiVisibleRef = useRef(true);
   const hasRestoredProgressRef = useRef(false);
-  const latestProgressRef = useRef({ pageIndex: 0, artStyle });
+  const pageIndexRef = useRef(0);
+  const lastSettleFeedbackIndexRef = useRef(0);
+  const programmaticTargetIndexRef = useRef(null);
+  const latestProgressRef = useRef({ pageIndex: 0, artStyle, controlsVisible: true });
   const inferredVisualAnchor = React.useMemo(() => inferVisualAnchor(story), [story]);
 
   const readerIdentity = React.useMemo(() => {
@@ -355,16 +363,59 @@ export default function StoryReaderScreen({ navigation, route }) {
     }
   };
 
-  const scrollToPage = (targetIndex) => {
-    if (targetIndex < 0 || targetIndex > totalPages - 1) return;
-    listRef.current?.scrollToOffset({
-      offset: targetIndex * pageWidth,
-      animated: true,
-    });
-  };
-
   const canGoPrevious = pageIndex > 0;
   const canGoNext = pageIndex < totalPages - 1;
+
+  const triggerPageSettleFeedback = React.useCallback(
+    (nextIndex) => {
+      if (!isHydrated || !Number.isFinite(nextIndex)) return;
+
+      const normalizedIndex = Math.floor(nextIndex);
+      if (lastSettleFeedbackIndexRef.current === normalizedIndex) return;
+      lastSettleFeedbackIndexRef.current = normalizedIndex;
+
+      pageSettleAnim.stopAnimation();
+      pageSettleAnim.setValue(0);
+      Animated.timing(pageSettleAnim, {
+        toValue: 1,
+        duration: 140,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    },
+    [isHydrated, pageSettleAnim]
+  );
+
+  const commitPageIndexChange = React.useCallback(
+    (nextIndex, options = {}) => {
+      const { scroll = false, animated = true, programmatic = false } = options;
+      if (totalPages <= 0 || !Number.isFinite(nextIndex)) return;
+
+      const clampedIndex = Math.min(Math.max(Math.floor(nextIndex), 0), totalPages - 1);
+      if (clampedIndex === pageIndexRef.current) return;
+
+      if (programmatic) {
+        programmaticTargetIndexRef.current = clampedIndex;
+      }
+
+      triggerPageSettleFeedback(clampedIndex);
+      pageIndexRef.current = clampedIndex;
+      setPageIndex(clampedIndex);
+
+      if (scroll) {
+        listRef.current?.scrollToOffset({
+          offset: clampedIndex * pageWidth,
+          animated,
+        });
+      }
+    },
+    [pageWidth, totalPages, triggerPageSettleFeedback]
+  );
+
+  const scrollToPage = (targetIndex) => {
+    commitPageIndexChange(targetIndex, { scroll: true, animated: true, programmatic: true });
+  };
 
   const applyPendingRestoreScroll = React.useCallback(() => {
     const restoreIndex = pendingRestoreIndexRef.current;
@@ -408,6 +459,10 @@ export default function StoryReaderScreen({ navigation, route }) {
     setInitialIndex((prev) => (prev === clampedIndex ? prev : clampedIndex));
   }, [pageIndex, totalPages]);
 
+  useEffect(() => {
+    pageIndexRef.current = pageIndex;
+  }, [pageIndex]);
+
   const fadeUiTo = React.useCallback(
     (toValue, duration) => {
       Animated.timing(uiOpacity, {
@@ -426,6 +481,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     uiHideTimerRef.current = setTimeout(() => {
       isUiVisibleRef.current = false;
+      setControlsVisible(false);
       fadeUiTo(0, 260);
       uiHideTimerRef.current = null;
     }, 3500);
@@ -433,6 +489,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const registerUiInteraction = React.useCallback(() => {
     isUiVisibleRef.current = true;
+    setControlsVisible(true);
     fadeUiTo(1, 280);
     scheduleUiAutoHide();
   }, [fadeUiTo, scheduleUiAutoHide]);
@@ -445,29 +502,35 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     if (isUiVisibleRef.current) {
       isUiVisibleRef.current = false;
+      setControlsVisible(false);
       fadeUiTo(0, 280);
       return;
     }
 
     isUiVisibleRef.current = true;
+    setControlsVisible(true);
     fadeUiTo(1, 280);
     scheduleUiAutoHide();
   }, [fadeUiTo, scheduleUiAutoHide]);
 
   useEffect(() => {
-    scheduleUiAutoHide();
+    if (!isHydrated) return;
+    if (isUiVisibleRef.current) {
+      scheduleUiAutoHide();
+    }
     return () => {
       if (uiHideTimerRef.current) {
         clearTimeout(uiHideTimerRef.current);
         uiHideTimerRef.current = null;
       }
     };
-  }, [scheduleUiAutoHide]);
+  }, [isHydrated, scheduleUiAutoHide]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isUiVisibleRef.current) return;
     scheduleUiAutoHide();
-  }, [pageIndex, scheduleUiAutoHide]);
+  }, [isHydrated, pageIndex, scheduleUiAutoHide]);
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -478,43 +541,58 @@ export default function StoryReaderScreen({ navigation, route }) {
   }, [progressAnim, progressRatio]);
 
   useEffect(() => {
-    latestProgressRef.current = { pageIndex, artStyle };
-  }, [pageIndex, artStyle]);
+    latestProgressRef.current = { pageIndex, artStyle, controlsVisible };
+  }, [pageIndex, artStyle, controlsVisible]);
 
-  // Load saved reading progress and restore page position.
+  // Hydrate saved reading progress + controls before rendering reader content.
   useEffect(() => {
     let cancelled = false;
     hasRestoredProgressRef.current = false;
     listHasLayoutRef.current = false;
     pendingRestoreIndexRef.current = null;
     hasSnappedAfterLayoutRef.current = false;
+    setIsHydrated(false);
 
     const loadProgress = async () => {
+      let restoredIndex = 0;
+      let restoredControlsVisible = true;
+
       try {
         const raw = await AsyncStorage.getItem(progressStorageKey);
-        if (!raw) return;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const savedIndex = Number(parsed?.pageIndex);
+          if (Number.isFinite(savedIndex)) {
+            restoredIndex = totalPages > 0
+              ? Math.min(Math.max(Math.floor(savedIndex), 0), totalPages - 1)
+              : 0;
+          }
 
-        const parsed = JSON.parse(raw);
-        const savedIndex = Number(parsed?.pageIndex);
-        if (!Number.isFinite(savedIndex)) return;
-
-        const clampedIndex = totalPages > 0
-          ? Math.min(Math.max(Math.floor(savedIndex), 0), totalPages - 1)
-          : 0;
-
-        if (cancelled) return;
-        setPageIndex(clampedIndex);
-        setInitialIndex(clampedIndex);
-        pendingRestoreIndexRef.current = clampedIndex;
-        applyPendingRestoreScroll();
-
-        console.log(`[readerProgress] loaded page ${clampedIndex} for ${progressStorageKey}`);
+          if (typeof parsed?.controlsVisible === "boolean") {
+            restoredControlsVisible = parsed.controlsVisible;
+          }
+        }
       } catch (error) {
         console.warn("Failed to load reader progress", error);
       } finally {
-        if (!cancelled) {
-          hasRestoredProgressRef.current = true;
-        }
+        if (cancelled) return;
+
+        setPageIndex(restoredIndex);
+        setInitialIndex(restoredIndex);
+        setControlsVisible(restoredControlsVisible);
+        pageIndexRef.current = restoredIndex;
+        lastSettleFeedbackIndexRef.current = restoredIndex;
+        programmaticTargetIndexRef.current = null;
+        pageSettleAnim.setValue(1);
+        isUiVisibleRef.current = restoredControlsVisible;
+        uiOpacity.setValue(restoredControlsVisible ? 1 : 0);
+        latestProgressRef.current = {
+          pageIndex: restoredIndex,
+          artStyle,
+          controlsVisible: restoredControlsVisible,
+        };
+        hasRestoredProgressRef.current = true;
+        setIsHydrated(true);
       }
     };
 
@@ -523,7 +601,7 @@ export default function StoryReaderScreen({ navigation, route }) {
     return () => {
       cancelled = true;
     };
-  }, [progressStorageKey, applyPendingRestoreScroll]);
+  }, [progressStorageKey, artStyle, totalPages, uiOpacity, pageSettleAnim]);
 
   useEffect(() => {
     let cancelled = false;
@@ -558,20 +636,28 @@ export default function StoryReaderScreen({ navigation, route }) {
     };
   }, [visualStorageKey, inferredVisualAnchor]);
 
-  // Debounced save whenever page index changes.
+  // Debounced save whenever page index or controls visibility changes.
   useEffect(() => {
-    if (!hasRestoredProgressRef.current) return;
+    if (!isHydrated || !hasRestoredProgressRef.current) return;
 
     if (saveDebounceRef.current) {
       clearTimeout(saveDebounceRef.current);
     }
 
     saveDebounceRef.current = setTimeout(async () => {
-      const { pageIndex: latestPageIndex, artStyle: latestArtStyle } = latestProgressRef.current;
+      const {
+        pageIndex: latestPageIndex,
+        artStyle: latestArtStyle,
+        controlsVisible: latestControlsVisible,
+      } = latestProgressRef.current;
       try {
         await AsyncStorage.setItem(
           progressStorageKey,
-          JSON.stringify({ pageIndex: latestPageIndex, artStyle: latestArtStyle })
+          JSON.stringify({
+            pageIndex: latestPageIndex,
+            artStyle: latestArtStyle,
+            controlsVisible: latestControlsVisible,
+          })
         );
       } catch (error) {
         console.warn("Failed to save reader progress", error);
@@ -586,7 +672,7 @@ export default function StoryReaderScreen({ navigation, route }) {
         saveDebounceRef.current = null;
       }
     };
-  }, [pageIndex, artStyle, progressStorageKey]);
+  }, [pageIndex, artStyle, controlsVisible, isHydrated, progressStorageKey]);
 
   // Save latest progress on unmount.
   useEffect(() => {
@@ -598,10 +684,18 @@ export default function StoryReaderScreen({ navigation, route }) {
 
       if (!hasRestoredProgressRef.current) return;
 
-      const { pageIndex: latestPageIndex, artStyle: latestArtStyle } = latestProgressRef.current;
+      const {
+        pageIndex: latestPageIndex,
+        artStyle: latestArtStyle,
+        controlsVisible: latestControlsVisible,
+      } = latestProgressRef.current;
       AsyncStorage.setItem(
         progressStorageKey,
-        JSON.stringify({ pageIndex: latestPageIndex, artStyle: latestArtStyle })
+        JSON.stringify({
+          pageIndex: latestPageIndex,
+          artStyle: latestArtStyle,
+          controlsVisible: latestControlsVisible,
+        })
       )
         .then(() => {
           console.log(`[readerProgress] saved page ${latestPageIndex} for ${progressStorageKey}`);
@@ -697,6 +791,8 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   // Auto-generate image when page changes
   useEffect(() => {
+    if (!isHydrated) return;
+
     const k = keyFor(pageIndex, artStyle);
     const page = pages[pageIndex];
     const promptText = page?.prompt || page?.text;
@@ -733,7 +829,7 @@ export default function StoryReaderScreen({ navigation, route }) {
         }
       }
     }
-  }, [pageIndex, artStyle, visualAnchor, inferredVisualAnchor]);
+  }, [isHydrated, pageIndex, artStyle, visualAnchor, inferredVisualAnchor]);
 
   // Keep page index in-range when page source changes.
   useEffect(() => {
@@ -766,12 +862,12 @@ export default function StoryReaderScreen({ navigation, route }) {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: BG_TWILIGHT,
+        backgroundColor: "transparent",
       }}>
         <View
           style={{
             minHeight: isLandscape ? 320 : 420,
-            backgroundColor: PAPER,
+            backgroundColor: READER_BACKDROP,
             borderRadius: 24,
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 8 },
@@ -780,24 +876,29 @@ export default function StoryReaderScreen({ navigation, route }) {
             elevation: 8,
             alignSelf: "center",
             marginVertical: 18,
-            padding: isLandscape ? 24 : 20,
+            padding: 0,
             flexDirection: isLandscape ? "row" : "column",
-            gap: 24,
+            gap: 0,
             width: "92%",
             overflow: "hidden",
           }}
         >
           {isLandscape ? (
-            <View style={styles.leftPageTextContainer}>
-              <View style={styles.leftPageTextColumn}>
+            <View style={[styles.leftPageTextContainer, { backgroundColor: PAGE_COLOR }]}>
+              <View style={styles.leftPageContent}>
                 <Text style={[styles.storyText, fontsLoaded && styles.storyTextNunito]}>{item?.text}</Text>
               </View>
             </View>
           ) : (
-            <Text style={[styles.storyText, fontsLoaded && styles.storyTextNunito]}>{item?.text}</Text>
+            <View style={[styles.leftPageTextContainer, styles.leftPageTextContainerPortrait, { backgroundColor: PAGE_COLOR }]}>
+              <View style={styles.leftPageContent}>
+                <Text style={[styles.storyText, fontsLoaded && styles.storyTextNunito]}>{item?.text}</Text>
+              </View>
+            </View>
           )}
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingLeft: isLandscape ? 16 : 0 }}>
-            <View style={styles.illustrationBox}>
+          <View style={[styles.rightPageSurface, { backgroundColor: PAGE_COLOR }]}>
+            <View style={styles.rightPageContent}>
+              <View style={styles.illustrationBox}>
               {(() => {
                 const k = keyFor(index, artStyle);
                 const img = pageImages[k];
@@ -820,7 +921,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                     {img && !placeholderPayload && (
                       <Animated.Image
                         source={{ uri: img }}
-                        style={[{ width: "100%", height: "100%", borderRadius: 12 }, { opacity: opacity || 1 }]}
+                        style={[{ width: "100%", height: "100%", borderRadius: 0 }, { opacity: opacity || 1 }]}
                         resizeMode="cover"
                         onLoad={() => {
                           setFailedImages((prev) => {
@@ -853,6 +954,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                   </>
                 );
               })()}
+              </View>
             </View>
           </View>
           <Animated.View
@@ -890,9 +992,19 @@ export default function StoryReaderScreen({ navigation, route }) {
     );
   };
 
+  if (!isHydrated) {
+    return (
+      <View style={styles.hydrationPlaceholder}>
+        <StatusBar hidden />
+        <ActivityIndicator size="small" color="#C8B04A" />
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flex: 1, backgroundColor: BG_TWILIGHT }}>
+    <View style={{ flex: 1, backgroundColor: OUTER_BG }}>
       <StatusBar hidden />
+      <View pointerEvents="none" style={styles.readingVignette} />
 
       <Animated.View style={[styles.headerRow, { opacity: uiOpacity }]}>
         <View style={styles.headerLeft}>
@@ -952,7 +1064,26 @@ export default function StoryReaderScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
 
-      <View style={styles.pageTapSurface}>
+      <Animated.View
+        style={[
+          styles.pageSettleWrap,
+          {
+            opacity: pageSettleAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.99, 1],
+            }),
+            transform: [
+              {
+                translateY: pageSettleAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [2, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.pageTapSurface}>
         {/* Swipeable pages */}
         <AnimatedFlatList
           key={`reader-pages-${pageWidth}`}
@@ -972,7 +1103,16 @@ export default function StoryReaderScreen({ navigation, route }) {
           getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: true }
+            {
+              useNativeDriver: true,
+              listener: (e) => {
+                if (programmaticTargetIndexRef.current != null) return;
+                const i = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
+                if (i !== pageIndexRef.current) {
+                  commitPageIndexChange(i);
+                }
+              },
+            }
           )}
           scrollEventThrottle={16}
           onTouchStart={(e) => {
@@ -995,7 +1135,7 @@ export default function StoryReaderScreen({ navigation, route }) {
             toggleControls();
           }}
           onScrollBeginDrag={() => {
-            didUserDragRef.current = true;
+            programmaticTargetIndexRef.current = null;
             registerUiInteraction();
           }}
           onScrollEndDrag={registerUiInteraction}
@@ -1003,20 +1143,38 @@ export default function StoryReaderScreen({ navigation, route }) {
           onMomentumScrollEnd={(e) => {
             registerUiInteraction();
             const i = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
-            if (didUserDragRef.current && i !== pageIndex) {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (programmaticTargetIndexRef.current != null && i === programmaticTargetIndexRef.current) {
+              programmaticTargetIndexRef.current = null;
+              return;
             }
-            didUserDragRef.current = false;
-            setPageIndex(i);
+            programmaticTargetIndexRef.current = null;
+            if (i !== pageIndexRef.current) {
+              commitPageIndexChange(i);
+            }
           }}
         />
       </View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#1F1633" },
+  hydrationPlaceholder: {
+    flex: 1,
+    backgroundColor: OUTER_BG,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readingVignette: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.12)",
+  },
 
   headerRow: {
     position: "absolute",
@@ -1052,14 +1210,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#C8B04A",
+    color: "#5F523A",
     marginBottom: 2,
     letterSpacing: 0.3,
-    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowColor: "rgba(255,255,255,0.55)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  progress: { fontSize: 11, opacity: 0.8, color: "#D3C7FB" },
+  progress: { fontSize: 11, opacity: 0.95, color: "#5F5A6D" },
 
   styleSelector: {
     position: "absolute",
@@ -1111,14 +1269,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(167,139,250,0.15)",
+    backgroundColor: "rgba(36,26,58,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.3)",
+    borderColor: "rgba(36,26,58,0.2)",
   },
   closeText: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#A78BFA",
+    color: "#46366F",
   },
   pageControls: {
     position: "absolute",
@@ -1134,20 +1292,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
-    backgroundColor: "rgba(167,139,250,0.15)",
+    backgroundColor: "rgba(36,26,58,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.3)",
+    borderColor: "rgba(36,26,58,0.2)",
   },
   pageControlButtonDisabled: {
     opacity: 0.35,
   },
   pageControlText: {
-    color: "#F5F3FF",
+    color: "#2D243F",
     fontSize: 13,
     fontWeight: "600",
   },
 
   pageScroller: { flex: 1 },
+  pageSettleWrap: { flex: 1 },
   pageTapSurface: { flex: 1 },
   page: { flex: 1 },
   tapZonesContainer: {
@@ -1187,16 +1346,35 @@ const styles = StyleSheet.create({
   leftPageTextContainer: {
     flex: 1,
     justifyContent: "flex-start",
-    paddingTop: 2,
-    paddingBottom: 0,
-    paddingLeft: 8,
-    paddingRight: 4,
+  },
+  leftPageTextContainerPortrait: {
+    width: "100%",
+  },
+  leftPageContent: {
+    flex: 1,
+    justifyContent: "center",
+    paddingTop: 22,
+    paddingBottom: 18,
+    paddingLeft: 24,
+    paddingRight: 20,
   },
   leftPageTextColumn: {
     flex: 1,
-    justifyContent: "flex-start",
-    maxWidth: "66%",
+    justifyContent: "center",
+    maxWidth: "100%",
     alignSelf: "flex-start",
+  },
+  rightPageSurface: {
+    flex: 1,
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+  },
+  rightPageContent: {
+    flex: 1,
+    paddingTop: 22,
+    paddingBottom: 18,
+    paddingLeft: 20,
+    paddingRight: 24,
   },
   storyText: {
     fontSize: 22,
@@ -1210,14 +1388,15 @@ const styles = StyleSheet.create({
   },
 
   illustrationBox: {
+    flex: 1,
     width: "100%",
-    height: 220,
-    minHeight: 220,
-    maxHeight: 220,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.12)",
-    backgroundColor: "rgba(0,0,0,0.04)",
+    height: "100%",
+    minHeight: 0,
+    maxHeight: "100%",
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
@@ -1229,7 +1408,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.9)",
-    borderRadius: 12,
+    borderRadius: 0,
     zIndex: 2,
   },
   loadingText: {
@@ -1261,7 +1440,7 @@ const styles = StyleSheet.create({
   placeholderCard: {
     width: "100%",
     height: "100%",
-    borderRadius: 12,
+    borderRadius: 0,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
