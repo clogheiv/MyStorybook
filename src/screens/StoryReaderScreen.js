@@ -261,6 +261,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   const progressAnim = useRef(new Animated.Value(progressRatio)).current;
   const uiOpacity = useRef(new Animated.Value(1)).current;
   const pageSettleAnim = useRef(new Animated.Value(1)).current;
+  const ambientDriftOpacity = useRef(new Animated.Value(1)).current;
   const listRef = useRef(null);
   const listHasLayoutRef = useRef(false);
   const pendingRestoreIndexRef = useRef(null);
@@ -541,6 +542,36 @@ export default function StoryReaderScreen({ navigation, route }) {
   }, [progressAnim, progressRatio]);
 
   useEffect(() => {
+    if (!isHydrated) {
+      ambientDriftOpacity.setValue(1);
+      return;
+    }
+
+    const ambientDriftLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ambientDriftOpacity, {
+          toValue: 0.995,
+          duration: 7500,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(ambientDriftOpacity, {
+          toValue: 1,
+          duration: 7500,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    ambientDriftLoop.start();
+
+    return () => {
+      ambientDriftLoop.stop();
+      ambientDriftOpacity.setValue(1);
+    };
+  }, [isHydrated, ambientDriftOpacity]);
+
+  useEffect(() => {
     latestProgressRef.current = { pageIndex, artStyle, controlsVisible };
   }, [pageIndex, artStyle, controlsVisible]);
 
@@ -650,6 +681,7 @@ export default function StoryReaderScreen({ navigation, route }) {
         artStyle: latestArtStyle,
         controlsVisible: latestControlsVisible,
       } = latestProgressRef.current;
+      const lastOpenedAt = Date.now();
       try {
         await AsyncStorage.setItem(
           progressStorageKey,
@@ -657,6 +689,7 @@ export default function StoryReaderScreen({ navigation, route }) {
             pageIndex: latestPageIndex,
             artStyle: latestArtStyle,
             controlsVisible: latestControlsVisible,
+            lastOpenedAt,
           })
         );
       } catch (error) {
@@ -689,12 +722,14 @@ export default function StoryReaderScreen({ navigation, route }) {
         artStyle: latestArtStyle,
         controlsVisible: latestControlsVisible,
       } = latestProgressRef.current;
+      const lastOpenedAt = Date.now();
       AsyncStorage.setItem(
         progressStorageKey,
         JSON.stringify({
           pageIndex: latestPageIndex,
           artStyle: latestArtStyle,
           controlsVisible: latestControlsVisible,
+          lastOpenedAt,
         })
       )
         .then(() => {
@@ -864,24 +899,27 @@ export default function StoryReaderScreen({ navigation, route }) {
         justifyContent: "center",
         backgroundColor: "transparent",
       }}>
-        <View
-          style={{
-            minHeight: isLandscape ? 320 : 420,
-            backgroundColor: READER_BACKDROP,
-            borderRadius: 24,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.10,
-            shadowRadius: 24,
-            elevation: 8,
-            alignSelf: "center",
-            marginVertical: 18,
-            padding: 0,
-            flexDirection: isLandscape ? "row" : "column",
-            gap: 0,
-            width: "92%",
-            overflow: "hidden",
-          }}
+        <Animated.View
+          style={[
+            {
+              minHeight: isLandscape ? 320 : 420,
+              backgroundColor: READER_BACKDROP,
+              borderRadius: 24,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.10,
+              shadowRadius: 24,
+              elevation: 8,
+              alignSelf: "center",
+              marginVertical: 18,
+              padding: 0,
+              flexDirection: isLandscape ? "row" : "column",
+              gap: 0,
+              width: "92%",
+              overflow: "hidden",
+            },
+            { opacity: ambientDriftOpacity },
+          ]}
         >
           {isLandscape ? (
             <View style={[styles.leftPageTextContainer, { backgroundColor: PAGE_COLOR }]}>
@@ -967,7 +1005,7 @@ export default function StoryReaderScreen({ navigation, route }) {
             pointerEvents="none"
             style={[styles.pageDepthEdge, styles.pageDepthRight, { opacity: rightEdgeOpacity }]}
           />
-        </View>
+        </Animated.View>
         <View style={styles.tapZonesContainer} pointerEvents="box-none">
           <Pressable
             style={styles.tapZoneLeft}
@@ -1506,10 +1544,10 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     left: "50%",
-    width: 18,
-    marginLeft: -9,
-    backgroundColor: "rgba(0,0,0,0.03)",
-    borderRadius: 10,
+    width: 6,
+    marginLeft: -3,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    borderRadius: 3,
   },
   pageSpineCrease: {
     position: "absolute",
@@ -1518,7 +1556,7 @@ const styles = StyleSheet.create({
     left: "50%",
     width: 2,
     marginLeft: -1,
-    backgroundColor: "rgba(0,0,0,0.05)",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
 
   // Page-turn illusion overlays
