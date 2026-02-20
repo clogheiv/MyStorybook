@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
 
 export default function StoryDetailsScreen({ navigation, route }) {
   const { story, selectedChild } = route?.params || {};
@@ -14,7 +17,7 @@ export default function StoryDetailsScreen({ navigation, route }) {
     { key: "classic", label: "📖 Classic" },
   ];
 
-  const progressStorageKey = React.useMemo(() => {
+  const readerIdentity = React.useMemo(() => {
     const storyId =
       story?.id != null && String(story.id).trim()
         ? String(story.id).trim()
@@ -33,39 +36,65 @@ export default function StoryDetailsScreen({ navigation, route }) {
       childId = selectedChild.trim();
     }
 
-    return `readerProgress:${storyId}:${childId}`;
+    return { storyId, childId };
   }, [story?.id, story?.title, selectedChild]);
+  const progressStorageKey = React.useMemo(
+    () => `readerProgress:${readerIdentity.storyId}:${readerIdentity.childId}`,
+    [readerIdentity]
+  );
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadProgressForStory = React.useCallback(async () => {
+    const storyId = readerIdentity.storyId;
+    if (!storyId || storyId === "unknown") {
+      setResumePageIndex(null);
+      return;
+    }
 
-    const loadProgress = async () => {
-      try {
-        const raw = await AsyncStorage.getItem(progressStorageKey);
-        if (!raw) {
-          if (!cancelled) setResumePageIndex(null);
-          return;
+    try {
+      // Primary source: shared story progress map (used by Story Library).
+      const sharedRaw = await AsyncStorage.getItem(STORY_PROGRESS_STORAGE_KEY);
+      if (sharedRaw) {
+        const parsedShared = JSON.parse(sharedRaw);
+        if (parsedShared && typeof parsedShared === "object" && !Array.isArray(parsedShared)) {
+          const sharedIndex = Number(parsedShared[storyId]);
+          if (Number.isFinite(sharedIndex) && sharedIndex >= 0) {
+            setResumePageIndex(Math.floor(sharedIndex));
+            return;
+          }
         }
-
-        const parsed = JSON.parse(raw);
-        const savedPageIndex = Number(parsed?.pageIndex);
-        if (!Number.isFinite(savedPageIndex) || savedPageIndex < 0) {
-          if (!cancelled) setResumePageIndex(null);
-          return;
-        }
-
-        if (!cancelled) setResumePageIndex(Math.floor(savedPageIndex));
-      } catch {
-        if (!cancelled) setResumePageIndex(null);
       }
-    };
 
-    loadProgress();
+      // Fallback to reader-specific key for backward compatibility.
+      const raw = await AsyncStorage.getItem(progressStorageKey);
+      if (!raw) {
+        setResumePageIndex(null);
+        return;
+      }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [progressStorageKey]);
+      const parsed = JSON.parse(raw);
+      const savedPageIndex = Number(parsed?.pageIndex);
+      if (!Number.isFinite(savedPageIndex) || savedPageIndex < 0) {
+        setResumePageIndex(null);
+        return;
+      }
+
+      setResumePageIndex(Math.floor(savedPageIndex));
+    } catch {
+      setResumePageIndex(null);
+    }
+  }, [progressStorageKey, readerIdentity.storyId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const run = async () => {
+        await loadProgressForStory();
+      };
+
+      run();
+
+      return undefined;
+    }, [loadProgressForStory])
+  );
 
   return (
     <ScrollView

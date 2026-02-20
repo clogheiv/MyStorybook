@@ -32,6 +32,8 @@ const OUTER_BG = "#2F2B45";
 const READER_BACKDROP = "#F1EEE6";
 const PAGE_COLOR = "#F7F4ED";
 const INK = "#1E1B2E";
+const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
+const COMPLETION_DELAY_MS = 30000;
 
 const DEMO_PAGES = [
   "Once upon a quiet afternoon, a small turtle decided it was time to explore beyond the familiar pond.",
@@ -248,6 +250,8 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [initialIndex, setInitialIndex] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [completionCelebrated, setCompletionCelebrated] = useState(false);
+  const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const totalPages = pages.length;
   const progressRatio = totalPages > 0 ? (pageIndex + 1) / totalPages : 0;
@@ -271,12 +275,18 @@ export default function StoryReaderScreen({ navigation, route }) {
   const suppressNextToggleRef = useRef(false);
   const saveDebounceRef = useRef(null);
   const uiHideTimerRef = useRef(null);
+  const completionTimerRef = useRef(null);
   const isUiVisibleRef = useRef(true);
   const hasRestoredProgressRef = useRef(false);
   const pageIndexRef = useRef(0);
   const lastSettleFeedbackIndexRef = useRef(0);
   const programmaticTargetIndexRef = useRef(null);
-  const latestProgressRef = useRef({ pageIndex: 0, artStyle, controlsVisible: true });
+  const latestProgressRef = useRef({
+    pageIndex: 0,
+    artStyle,
+    controlsVisible: true,
+    completionCelebrated: false,
+  });
   const inferredVisualAnchor = React.useMemo(() => inferVisualAnchor(story), [story]);
 
   const readerIdentity = React.useMemo(() => {
@@ -308,6 +318,37 @@ export default function StoryReaderScreen({ navigation, route }) {
     () => `visualAnchor:${readerIdentity.storyId}:${readerIdentity.childId}:${artStyle}`,
     [readerIdentity, artStyle]
   );
+  const persistStoryProgress = React.useCallback(
+    async (currentPageIndex) => {
+      const storyId = readerIdentity.storyId;
+      if (!storyId || storyId === "unknown") return;
+
+      const normalizedPageIndex = Number.isFinite(currentPageIndex)
+        ? Math.max(0, Math.floor(currentPageIndex))
+        : 0;
+
+      try {
+        const raw = await AsyncStorage.getItem(STORY_PROGRESS_STORAGE_KEY);
+        let nextStoryProgress = {};
+
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            nextStoryProgress = { ...parsed };
+          }
+        }
+
+        nextStoryProgress[storyId] = normalizedPageIndex;
+        await AsyncStorage.setItem(
+          STORY_PROGRESS_STORAGE_KEY,
+          JSON.stringify(nextStoryProgress)
+        );
+      } catch (error) {
+        console.warn("Failed to save storyProgress map", error);
+      }
+    },
+    [readerIdentity.storyId]
+  );
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
@@ -323,6 +364,13 @@ export default function StoryReaderScreen({ navigation, route }) {
       { text: "Leave", onPress: () => navigation.goBack() },
     ]);
   }, [navigation, pageIndex]);
+
+  const clearCompletionTimer = React.useCallback(() => {
+    if (completionTimerRef.current) {
+      clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -572,8 +620,8 @@ export default function StoryReaderScreen({ navigation, route }) {
   }, [isHydrated, ambientDriftOpacity]);
 
   useEffect(() => {
-    latestProgressRef.current = { pageIndex, artStyle, controlsVisible };
-  }, [pageIndex, artStyle, controlsVisible]);
+    latestProgressRef.current = { pageIndex, artStyle, controlsVisible, completionCelebrated };
+  }, [pageIndex, artStyle, controlsVisible, completionCelebrated]);
 
   // Hydrate saved reading progress + controls before rendering reader content.
   useEffect(() => {
@@ -582,11 +630,13 @@ export default function StoryReaderScreen({ navigation, route }) {
     listHasLayoutRef.current = false;
     pendingRestoreIndexRef.current = null;
     hasSnappedAfterLayoutRef.current = false;
+    clearCompletionTimer();
     setIsHydrated(false);
 
     const loadProgress = async () => {
       let restoredIndex = 0;
       let restoredControlsVisible = true;
+      let restoredCompletionCelebrated = false;
 
       try {
         const raw = await AsyncStorage.getItem(progressStorageKey);
@@ -602,6 +652,9 @@ export default function StoryReaderScreen({ navigation, route }) {
           if (typeof parsed?.controlsVisible === "boolean") {
             restoredControlsVisible = parsed.controlsVisible;
           }
+          if (typeof parsed?.completionCelebrated === "boolean") {
+            restoredCompletionCelebrated = parsed.completionCelebrated;
+          }
         }
       } catch (error) {
         console.warn("Failed to load reader progress", error);
@@ -611,6 +664,8 @@ export default function StoryReaderScreen({ navigation, route }) {
         setPageIndex(restoredIndex);
         setInitialIndex(restoredIndex);
         setControlsVisible(restoredControlsVisible);
+        setCompletionCelebrated(restoredCompletionCelebrated);
+        setShowCompletionOverlay(false);
         pageIndexRef.current = restoredIndex;
         lastSettleFeedbackIndexRef.current = restoredIndex;
         programmaticTargetIndexRef.current = null;
@@ -621,6 +676,7 @@ export default function StoryReaderScreen({ navigation, route }) {
           pageIndex: restoredIndex,
           artStyle,
           controlsVisible: restoredControlsVisible,
+          completionCelebrated: restoredCompletionCelebrated,
         };
         hasRestoredProgressRef.current = true;
         setIsHydrated(true);
@@ -630,9 +686,10 @@ export default function StoryReaderScreen({ navigation, route }) {
     loadProgress();
 
     return () => {
+      clearCompletionTimer();
       cancelled = true;
     };
-  }, [progressStorageKey, artStyle, totalPages, uiOpacity, pageSettleAnim]);
+  }, [clearCompletionTimer, progressStorageKey, artStyle, totalPages, uiOpacity, pageSettleAnim]);
 
   useEffect(() => {
     let cancelled = false;
@@ -667,6 +724,35 @@ export default function StoryReaderScreen({ navigation, route }) {
     };
   }, [visualStorageKey, inferredVisualAnchor]);
 
+  useEffect(() => {
+    if (!isHydrated || !hasRestoredProgressRef.current) return;
+    if (totalPages <= 0) return;
+
+    const isAtFinalPage = pageIndex >= totalPages - 1;
+    if (!isAtFinalPage || completionCelebrated || showCompletionOverlay) {
+      clearCompletionTimer();
+      return;
+    }
+
+    clearCompletionTimer();
+    completionTimerRef.current = setTimeout(() => {
+      completionTimerRef.current = null;
+      setCompletionCelebrated(true);
+      setShowCompletionOverlay(true);
+    }, COMPLETION_DELAY_MS);
+
+    return () => {
+      clearCompletionTimer();
+    };
+  }, [
+    clearCompletionTimer,
+    completionCelebrated,
+    isHydrated,
+    pageIndex,
+    showCompletionOverlay,
+    totalPages,
+  ]);
+
   // Debounced save whenever page index or controls visibility changes.
   useEffect(() => {
     if (!isHydrated || !hasRestoredProgressRef.current) return;
@@ -680,18 +766,29 @@ export default function StoryReaderScreen({ navigation, route }) {
         pageIndex: latestPageIndex,
         artStyle: latestArtStyle,
         controlsVisible: latestControlsVisible,
+        completionCelebrated: latestCompletionCelebrated,
       } = latestProgressRef.current;
+      const normalizedTotalPages = totalPages > 0 ? totalPages : 0;
+      const progressPercent = normalizedTotalPages > 0
+        ? Math.min(1, (latestPageIndex + 1) / normalizedTotalPages)
+        : 0;
       const lastOpenedAt = Date.now();
       try {
-        await AsyncStorage.setItem(
-          progressStorageKey,
-          JSON.stringify({
-            pageIndex: latestPageIndex,
-            artStyle: latestArtStyle,
-            controlsVisible: latestControlsVisible,
-            lastOpenedAt,
-          })
-        );
+        await Promise.all([
+          AsyncStorage.setItem(
+            progressStorageKey,
+            JSON.stringify({
+              pageIndex: latestPageIndex,
+              artStyle: latestArtStyle,
+              controlsVisible: latestControlsVisible,
+              completionCelebrated: latestCompletionCelebrated,
+              totalPages: normalizedTotalPages,
+              progressPercent,
+              lastOpenedAt,
+            })
+          ),
+          persistStoryProgress(latestPageIndex),
+        ]);
       } catch (error) {
         console.warn("Failed to save reader progress", error);
       } finally {
@@ -705,11 +802,21 @@ export default function StoryReaderScreen({ navigation, route }) {
         saveDebounceRef.current = null;
       }
     };
-  }, [pageIndex, artStyle, controlsVisible, isHydrated, progressStorageKey]);
+  }, [
+    pageIndex,
+    artStyle,
+    controlsVisible,
+    completionCelebrated,
+    isHydrated,
+    progressStorageKey,
+    persistStoryProgress,
+    totalPages,
+  ]);
 
   // Save latest progress on unmount.
   useEffect(() => {
     return () => {
+      clearCompletionTimer();
       if (saveDebounceRef.current) {
         clearTimeout(saveDebounceRef.current);
         saveDebounceRef.current = null;
@@ -721,17 +828,28 @@ export default function StoryReaderScreen({ navigation, route }) {
         pageIndex: latestPageIndex,
         artStyle: latestArtStyle,
         controlsVisible: latestControlsVisible,
+        completionCelebrated: latestCompletionCelebrated,
       } = latestProgressRef.current;
+      const normalizedTotalPages = totalPages > 0 ? totalPages : 0;
+      const progressPercent = normalizedTotalPages > 0
+        ? Math.min(1, (latestPageIndex + 1) / normalizedTotalPages)
+        : 0;
       const lastOpenedAt = Date.now();
-      AsyncStorage.setItem(
-        progressStorageKey,
-        JSON.stringify({
-          pageIndex: latestPageIndex,
-          artStyle: latestArtStyle,
-          controlsVisible: latestControlsVisible,
-          lastOpenedAt,
-        })
-      )
+      Promise.all([
+        AsyncStorage.setItem(
+          progressStorageKey,
+          JSON.stringify({
+            pageIndex: latestPageIndex,
+            artStyle: latestArtStyle,
+            controlsVisible: latestControlsVisible,
+            completionCelebrated: latestCompletionCelebrated,
+            totalPages: normalizedTotalPages,
+            progressPercent,
+            lastOpenedAt,
+          })
+        ),
+        persistStoryProgress(latestPageIndex),
+      ])
         .then(() => {
           console.log(`[readerProgress] saved page ${latestPageIndex} for ${progressStorageKey}`);
         })
@@ -739,7 +857,7 @@ export default function StoryReaderScreen({ navigation, route }) {
           console.warn("Failed to save reader progress on unmount", error);
         });
     };
-  }, [progressStorageKey]);
+  }, [clearCompletionTimer, persistStoryProgress, progressStorageKey, totalPages]);
 
   // Generate illustration for page
   // Uses generateImageFromAI utility (swap internals for real API)
@@ -1193,6 +1311,39 @@ export default function StoryReaderScreen({ navigation, route }) {
         />
       </View>
       </Animated.View>
+
+      {showCompletionOverlay && (
+        <View style={styles.completionOverlay}>
+          <View style={styles.completionCard}>
+            <Text style={styles.completionTitle}>You finished the story</Text>
+            <Text style={styles.completionSubtitle}>Sweet dreams.</Text>
+            <View style={styles.completionActions}>
+              <TouchableOpacity
+                style={styles.completionSecondaryButton}
+                onPress={() => {
+                  registerUiInteraction();
+                  clearCompletionTimer();
+                  setShowCompletionOverlay(false);
+                }}
+              >
+                <Text style={styles.completionSecondaryText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.completionPrimaryButton}
+                onPress={() => {
+                  registerUiInteraction();
+                  clearCompletionTimer();
+                  setShowCompletionOverlay(false);
+                  setCompletionCelebrated(false);
+                  scrollToPage(0);
+                }}
+              >
+                <Text style={styles.completionPrimaryText}>Read again</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1212,6 +1363,73 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(0,0,0,0.12)",
+  },
+  completionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    backgroundColor: "rgba(22,17,33,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  completionCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.12)",
+    backgroundColor: "rgba(39,31,57,0.96)",
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  completionTitle: {
+    fontSize: 21,
+    fontWeight: "600",
+    color: "#F4F1FF",
+    textAlign: "center",
+    letterSpacing: 0.2,
+  },
+  completionSubtitle: {
+    marginTop: 7,
+    fontSize: 14,
+    color: "#D7CFEA",
+    opacity: 0.9,
+    textAlign: "center",
+    letterSpacing: 0.2,
+  },
+  completionActions: {
+    marginTop: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 10,
+  },
+  completionSecondaryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.14)",
+    backgroundColor: "rgba(47,35,79,0.42)",
+  },
+  completionSecondaryText: {
+    fontSize: 13,
+    color: "#CFC5E5",
+    fontWeight: "600",
+    letterSpacing: 0.15,
+  },
+  completionPrimaryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.24)",
+    backgroundColor: "rgba(67,55,96,0.86)",
+  },
+  completionPrimaryText: {
+    fontSize: 13,
+    color: "#F4F1FF",
+    fontWeight: "600",
+    letterSpacing: 0.15,
   },
 
   headerRow: {
