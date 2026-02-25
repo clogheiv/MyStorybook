@@ -23,6 +23,7 @@ import { useFonts } from "expo-font";
 import { Nunito_400Regular } from "@expo-google-fonts/nunito";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
+import { resolveLocalIllustrationAsset } from "../data/localIllustrations";
 
 // Create AnimatedFlatList OUTSIDE component to maintain stable identity
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
@@ -34,13 +35,45 @@ const PAGE_COLOR = "#F7F4ED";
 const INK = "#1E1B2E";
 const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
 const COMPLETION_DELAY_MS = 30000;
+const PAGE_INITIAL_RENDER_COUNT = 2;
+const PAGE_BATCH_RENDER_COUNT = 3;
+const PAGE_WINDOW_SIZE = 5;
+const CHILD_NAME_TOKEN = "{{childName}}";
+const DEMO_ILLUSTRATION_PREFIX = "zoo";
 
 const DEMO_PAGES = [
-  "Once upon a quiet afternoon, a small turtle decided it was time to explore beyond the familiar pond.",
-  "With slow but steady steps, the turtle wandered through tall grass that whispered secrets in the breeze.",
-  "Along the way, the turtle met a curious rabbit who asked, \"Why move so slowly?\"",
-  "The turtle smiled and replied, \"Because I like to notice things others rush past.\"",
-  "By nightfall, the turtle felt brave. Not because it was fast, but because it kept taking the next small step.",
+  "The morning sun peeked in, and {{childName}} opened their eyes with a smile.",
+  "\"Today's the day,\" {{childName}} whispered. \"We're going to the zoo.\"",
+  "In the kitchen, {{childName}} found a warm breakfast waiting.",
+  "{{childName}} packed a small backpack with a juice box, an apple, and a favorite toy.",
+  "The car hummed along, and {{childName}} watched trees pass by like a friendly parade.",
+  "At last, {{childName}} saw a big sign: \"Welcome to the Big City Zoo!\"",
+  "Inside the gates, {{childName}} heard chirps, rustles, and faraway calls.",
+  "First came the monkeys, and {{childName}} watched them swing and chatter.",
+  "{{childName}} giggled and held Mom's hand. \"They're so silly,\" {{childName}} said.",
+  "Next were the elephants, and {{childName}} watched gentle giants move slowly.",
+  "One elephant sprayed cool water, and {{childName}} watched in awe.",
+  "Down the path, {{childName}} saw giraffes reach for leaves with careful bites.",
+  "\"So tall,\" {{childName}} murmured, feeling small in a good way.",
+  "Bright birds fluttered nearby, and {{childName}} saw feathers like tiny paintings.",
+  "A zookeeper spoke softly, and {{childName}} listened with quiet curiosity.",
+  "In a shady spot, {{childName}} found a lion resting and breathing deep.",
+  "\"He looks sleepy,\" {{childName}} whispered, keeping the moment calm.",
+  "At snack time, {{childName}} sat beside Mom and took slow bites of apple.",
+  "The day felt warm and steady, and {{childName}} moved at an easy pace.",
+  "At a calm pond, {{childName}} watched animals move softly and quietly.",
+  "{{childName}} took a deep breath. The zoo smelled like sunshine and leaves.",
+  "\"What's your favorite so far?\" Mom asked {{childName}} with a smile.",
+  "{{childName}} thought carefully. \"The elephants, the monkeys, and the lion.\"",
+  "As afternoon turned golden, {{childName}} noticed the zoo sounds grow softer.",
+  "At the last stop, {{childName}} looked back and remembered each animal like a picture.",
+  "\"Goodnight, zoo,\" {{childName}} said quietly, even before bedtime.",
+  "On the ride home, {{childName}} watched the sky and blinked slowly.",
+  "At home, pajamas felt cozy, and {{childName}} settled in with a happy sigh.",
+  "Mom sat close, and {{childName}} leaned in, safe and warm.",
+  "Back at the zoo, {{childName}} imagined lions curled together with their family.",
+  "{{childName}} imagined elephants standing close, peaceful and strong.",
+  "And {{childName}} snuggled in with Mom, as the day drifted into sleep.",
 ];
 const PLACEHOLDER_TOKEN_PREFIX = "__placeholder__:";
 
@@ -163,9 +196,34 @@ function PlaceholderIllustration({ payload }) {
   );
 }
 
+const resolveChildName = (selectedChild) => {
+  if (selectedChild && typeof selectedChild === "object") {
+    if (typeof selectedChild.name === "string" && selectedChild.name.trim()) {
+      return selectedChild.name.trim();
+    }
+    if (selectedChild.id != null && String(selectedChild.id).trim()) {
+      return String(selectedChild.id).trim();
+    }
+  }
+
+  if (typeof selectedChild === "string" && selectedChild.trim()) {
+    return selectedChild.trim();
+  }
+
+  return "friend";
+};
+
+const replaceChildNameToken = (input, childName) => {
+  if (typeof input !== "string") return input;
+  return input.split(CHILD_NAME_TOKEN).join(childName);
+};
+
+const buildSequentialIllustrationName = (prefix, index) =>
+  `${prefix}_${String(index + 1).padStart(2, "0")}.png`;
+
 export default function StoryReaderScreen({ navigation, route }) {
   // All hooks must be at the top level, in the same order every render
-  const { story, selectedChild, artStyle } = route?.params || {};
+  const { story, selectedChild, artStyle, startPageIndex, forceStart } = route?.params || {};
   const [fontsLoaded] = useFonts({
     Nunito: Nunito_400Regular,
   });
@@ -218,20 +276,43 @@ export default function StoryReaderScreen({ navigation, route }) {
   // - string[]
   // - { text: string, prompt?: string }[]
   // Falls back to demo pages if story.pages is missing/empty/invalid.
+  const childNameForStory = React.useMemo(
+    () => resolveChildName(selectedChild),
+    [selectedChild]
+  );
   const pages = React.useMemo(
     () => {
       const sourcePages = story?.pages;
       if (Array.isArray(sourcePages) && sourcePages.length > 0) {
         const normalized = sourcePages
-          .map((page) => {
+          .map((page, index) => {
             if (typeof page === "string") {
-              return { text: page, prompt: page };
+              const personalizedText = replaceChildNameToken(page, childNameForStory);
+              const illustrationAssetName = buildSequentialIllustrationName(
+                DEMO_ILLUSTRATION_PREFIX,
+                index
+              );
+              return {
+                text: personalizedText,
+                prompt: personalizedText,
+                illustrationAssetName,
+                illustrationAssetSource: resolveLocalIllustrationAsset(illustrationAssetName),
+              };
             }
             if (page && typeof page === "object" && typeof page.text === "string") {
-              const prompt = typeof page.prompt === "string" && page.prompt.trim()
+              const basePrompt = typeof page.prompt === "string" && page.prompt.trim()
                 ? page.prompt
                 : page.text;
-              return { text: page.text, prompt };
+              const illustrationAssetName =
+                typeof page.illustrationAssetName === "string" && page.illustrationAssetName.trim()
+                  ? page.illustrationAssetName.trim()
+                  : buildSequentialIllustrationName(DEMO_ILLUSTRATION_PREFIX, index);
+              return {
+                text: replaceChildNameToken(page.text, childNameForStory),
+                prompt: replaceChildNameToken(basePrompt, childNameForStory),
+                illustrationAssetName,
+                illustrationAssetSource: resolveLocalIllustrationAsset(illustrationAssetName),
+              };
             }
             return null;
           })
@@ -242,9 +323,21 @@ export default function StoryReaderScreen({ navigation, route }) {
         }
       }
 
-      return DEMO_PAGES.map((text) => ({ text, prompt: text }));
+      return DEMO_PAGES.map((text, index) => {
+        const personalizedText = replaceChildNameToken(text, childNameForStory);
+        const illustrationAssetName = buildSequentialIllustrationName(
+          DEMO_ILLUSTRATION_PREFIX,
+          index
+        );
+        return {
+          text: personalizedText,
+          prompt: personalizedText,
+          illustrationAssetName,
+          illustrationAssetSource: resolveLocalIllustrationAsset(illustrationAssetName),
+        };
+      });
     },
-    [story?.pages]
+    [childNameForStory, story?.pages]
   );
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -281,6 +374,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   const pageIndexRef = useRef(0);
   const lastSettleFeedbackIndexRef = useRef(0);
   const programmaticTargetIndexRef = useRef(null);
+  const allowExitRef = useRef(false);
   const latestProgressRef = useRef({
     pageIndex: 0,
     artStyle,
@@ -288,6 +382,22 @@ export default function StoryReaderScreen({ navigation, route }) {
     completionCelebrated: false,
   });
   const inferredVisualAnchor = React.useMemo(() => inferVisualAnchor(story), [story]);
+  const childDisplayName = React.useMemo(() => {
+    if (selectedChild && typeof selectedChild === "object") {
+      if (typeof selectedChild.name === "string" && selectedChild.name.trim()) {
+        return selectedChild.name.trim();
+      }
+      if (selectedChild.id != null && String(selectedChild.id).trim()) {
+        return String(selectedChild.id).trim();
+      }
+    }
+
+    if (typeof selectedChild === "string" && selectedChild.trim()) {
+      return selectedChild.trim();
+    }
+
+    return null;
+  }, [selectedChild]);
 
   const readerIdentity = React.useMemo(() => {
     const storyId =
@@ -352,18 +462,31 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
+  const isStoryComplete = totalPages > 0 && pageIndex >= totalPages - 1;
 
-  const requestExitReader = React.useCallback(() => {
-    if (pageIndex === 0) {
-      navigation.goBack();
-      return;
-    }
+  const requestExitReader = React.useCallback(
+    (pendingAction = null) => {
+      const performLeave = () => {
+        allowExitRef.current = true;
+        if (pendingAction) {
+          navigation.dispatch(pendingAction);
+          return;
+        }
+        navigation.goBack();
+      };
 
-    Alert.alert("Leave story?", "Your place is saved.", [
-      { text: "Stay", style: "cancel" },
-      { text: "Leave", onPress: () => navigation.goBack() },
-    ]);
-  }, [navigation, pageIndex]);
+      if (isStoryComplete) {
+        performLeave();
+        return;
+      }
+
+      Alert.alert("Leave story?", "Your progress is saved.", [
+        { text: "Keep reading", style: "cancel" },
+        { text: "Leave", onPress: performLeave },
+      ]);
+    },
+    [isStoryComplete, navigation]
+  );
 
   const clearCompletionTimer = React.useCallback(() => {
     if (completionTimerRef.current) {
@@ -382,6 +505,24 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     return () => backSub.remove();
   }, [requestExitReader]);
+
+  useEffect(() => {
+    const unsubscribeBeforeRemove = navigation.addListener("beforeRemove", (event) => {
+      if (allowExitRef.current) {
+        allowExitRef.current = false;
+        return;
+      }
+
+      if (isStoryComplete) {
+        return;
+      }
+
+      event.preventDefault();
+      requestExitReader(event.data.action);
+    });
+
+    return unsubscribeBeforeRemove;
+  }, [isStoryComplete, navigation, requestExitReader]);
 
   const retryImageForPage = (index, promptText) => {
     const k = keyFor(index, artStyle);
@@ -637,23 +778,63 @@ export default function StoryReaderScreen({ navigation, route }) {
       let restoredIndex = 0;
       let restoredControlsVisible = true;
       let restoredCompletionCelebrated = false;
+      const numericStartPageIndex = Number(startPageIndex);
+      const hasRequestedStart = Number.isFinite(numericStartPageIndex);
+      const requestedStartIndex = hasRequestedStart
+        ? totalPages > 0
+          ? Math.min(Math.max(Math.floor(numericStartPageIndex), 0), totalPages - 1)
+          : 0
+        : null;
+      const shouldForceStart = forceStart === true;
 
       try {
-        const raw = await AsyncStorage.getItem(progressStorageKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const savedIndex = Number(parsed?.pageIndex);
-          if (Number.isFinite(savedIndex)) {
-            restoredIndex = totalPages > 0
-              ? Math.min(Math.max(Math.floor(savedIndex), 0), totalPages - 1)
-              : 0;
+        if (shouldForceStart) {
+          restoredIndex = requestedStartIndex != null ? requestedStartIndex : 0;
+          restoredControlsVisible = true;
+          restoredCompletionCelebrated = false;
+
+          const normalizedTotalPages = totalPages > 0 ? totalPages : 0;
+          const progressPercent = normalizedTotalPages > 0
+            ? Math.min(1, (restoredIndex + 1) / normalizedTotalPages)
+            : 0;
+          const lastOpenedAt = Date.now();
+
+          await Promise.all([
+            AsyncStorage.setItem(
+              progressStorageKey,
+              JSON.stringify({
+                pageIndex: restoredIndex,
+                artStyle,
+                controlsVisible: restoredControlsVisible,
+                completionCelebrated: restoredCompletionCelebrated,
+                totalPages: normalizedTotalPages,
+                progressPercent,
+                lastOpenedAt,
+              })
+            ),
+            persistStoryProgress(restoredIndex),
+          ]);
+        } else {
+          const raw = await AsyncStorage.getItem(progressStorageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const savedIndex = Number(parsed?.pageIndex);
+            if (Number.isFinite(savedIndex)) {
+              restoredIndex = totalPages > 0
+                ? Math.min(Math.max(Math.floor(savedIndex), 0), totalPages - 1)
+                : 0;
+            }
+
+            if (typeof parsed?.controlsVisible === "boolean") {
+              restoredControlsVisible = parsed.controlsVisible;
+            }
+            if (typeof parsed?.completionCelebrated === "boolean") {
+              restoredCompletionCelebrated = parsed.completionCelebrated;
+            }
           }
 
-          if (typeof parsed?.controlsVisible === "boolean") {
-            restoredControlsVisible = parsed.controlsVisible;
-          }
-          if (typeof parsed?.completionCelebrated === "boolean") {
-            restoredCompletionCelebrated = parsed.completionCelebrated;
+          if (requestedStartIndex != null) {
+            restoredIndex = requestedStartIndex;
           }
         }
       } catch (error) {
@@ -689,7 +870,17 @@ export default function StoryReaderScreen({ navigation, route }) {
       clearCompletionTimer();
       cancelled = true;
     };
-  }, [clearCompletionTimer, progressStorageKey, artStyle, totalPages, uiOpacity, pageSettleAnim]);
+  }, [
+    clearCompletionTimer,
+    progressStorageKey,
+    artStyle,
+    totalPages,
+    uiOpacity,
+    pageSettleAnim,
+    startPageIndex,
+    forceStart,
+    persistStoryProgress,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -948,12 +1139,13 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     const k = keyFor(pageIndex, artStyle);
     const page = pages[pageIndex];
+    const hasStaticIllustration = Boolean(page?.illustrationAssetName);
     const promptText = page?.prompt || page?.text;
     const anchorText = visualAnchor || inferredVisualAnchor;
     const anchoredPrompt = anchorText && promptText
       ? `${anchorText}\nScene: ${promptText}`
       : promptText;
-    if (promptText && !pageImages[k] && !failedImages[k]) {
+    if (!hasStaticIllustration && promptText && !pageImages[k] && !failedImages[k]) {
       generateImageForPage(pageIndex, anchoredPrompt);
     }
 
@@ -972,12 +1164,13 @@ export default function StoryReaderScreen({ navigation, route }) {
         // previously failed; skip automatic prefetch until user retries
       } else {
         const nextPage = pages[nextIndex];
+        const nextHasStaticIllustration = Boolean(nextPage?.illustrationAssetName);
         const nextPromptText = nextPage?.prompt || nextPage?.text;
         const anchoredNextPrompt = anchorText && nextPromptText
           ? `${anchorText}\nScene: ${nextPromptText}`
           : nextPromptText;
         // Fire it but don't await (background fetch)
-        if (nextPromptText) {
+        if (!nextHasStaticIllustration && nextPromptText) {
           generateImageForPage(nextIndex, anchoredNextPrompt);
         }
       }
@@ -1057,6 +1250,8 @@ export default function StoryReaderScreen({ navigation, route }) {
               <View style={styles.illustrationBox}>
               {(() => {
                 const k = keyFor(index, artStyle);
+                const staticIllustrationSource = item?.illustrationAssetSource;
+                const hasStaticIllustration = Boolean(item?.illustrationAssetName);
                 const img = pageImages[k];
                 const loading = loadingImages[k];
                 const failed = failedImages[k];
@@ -1065,16 +1260,23 @@ export default function StoryReaderScreen({ navigation, route }) {
                 const placeholderPayload = parsePlaceholderPayload(img);
                 return (
                   <>
-                    {loading && (
+                    {staticIllustrationSource ? (
+                      <Image
+                        source={staticIllustrationSource}
+                        style={styles.staticIllustrationImage}
+                        resizeMode="cover"
+                      />
+                    ) : null}
+                    {!hasStaticIllustration && loading && (
                       <View style={styles.loadingOverlay}>
                         <ActivityIndicator size="large" color="#999" />
                         <Text style={styles.loadingText}>Illustrating…</Text>
                       </View>
                     )}
-                    {img && placeholderPayload && (
+                    {!hasStaticIllustration && img && placeholderPayload && (
                       <PlaceholderIllustration payload={placeholderPayload} />
                     )}
-                    {img && !placeholderPayload && (
+                    {!hasStaticIllustration && img && !placeholderPayload && (
                       <Animated.Image
                         source={{ uri: img }}
                         style={[{ width: "100%", height: "100%", borderRadius: 0 }, { opacity: opacity || 1 }]}
@@ -1093,7 +1295,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                         }}
                       />
                     )}
-                    {failed && !loading && (
+                    {!hasStaticIllustration && failed && !loading && (
                       <TouchableOpacity
                         style={styles.retryOverlay}
                         activeOpacity={0.85}
@@ -1106,7 +1308,9 @@ export default function StoryReaderScreen({ navigation, route }) {
                         <Text style={styles.retryText}>Illustration failed to load. Tap to retry.</Text>
                       </TouchableOpacity>
                     )}
-                    {!img && !loading && <Text style={styles.illustrationHint}>Illustration</Text>}
+                    {!staticIllustrationSource && !img && !loading && (
+                      <Text style={styles.illustrationHint}>Illustration</Text>
+                    )}
                   </>
                 );
               })()}
@@ -1167,8 +1371,13 @@ export default function StoryReaderScreen({ navigation, route }) {
           <Text numberOfLines={1} style={[styles.title, { fontSize: 20, letterSpacing: 0.5 }]}>
             {story?.title || "Story"}
           </Text>
+          {childDisplayName ? (
+            <Text numberOfLines={1} style={styles.readingAsHeaderText}>
+              Reading as {childDisplayName}
+            </Text>
+          ) : null}
           <Text style={styles.progress}>
-            {pageIndex + 1} of {totalPages}
+            Page {pageIndex + 1} of {totalPages}
           </Text>
         </View>
 
@@ -1246,6 +1455,11 @@ export default function StoryReaderScreen({ navigation, route }) {
           ref={listRef}
           onLayout={handleListLayout}
           initialScrollIndex={initialIndex}
+          initialNumToRender={PAGE_INITIAL_RENDER_COUNT}
+          maxToRenderPerBatch={PAGE_BATCH_RENDER_COUNT}
+          windowSize={PAGE_WINDOW_SIZE}
+          updateCellsBatchingPeriod={16}
+          removeClippedSubviews={Platform.OS === "android"}
           data={pages}
           horizontal
           snapToInterval={pageWidth}
@@ -1257,6 +1471,14 @@ export default function StoryReaderScreen({ navigation, route }) {
           renderItem={renderPage}
           style={styles.pageScroller}
           getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
+          onScrollToIndexFailed={({ index }) => {
+            requestAnimationFrame(() => {
+              listRef.current?.scrollToOffset({
+                offset: index * pageWidth,
+                animated: false,
+              });
+            });
+          }}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
             {
@@ -1319,17 +1541,29 @@ export default function StoryReaderScreen({ navigation, route }) {
             <Text style={styles.completionSubtitle}>Sweet dreams.</Text>
             <View style={styles.completionActions}>
               <TouchableOpacity
-                style={styles.completionSecondaryButton}
+                style={styles.completionCloseButton}
                 onPress={() => {
                   registerUiInteraction();
                   clearCompletionTimer();
                   setShowCompletionOverlay(false);
+                  navigation.navigate("Home");
                 }}
               >
-                <Text style={styles.completionSecondaryText}>Close</Text>
+                <Text style={styles.completionCloseText}>Close</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.completionPrimaryButton}
+                style={styles.completionBackHomeButton}
+                onPress={() => {
+                  registerUiInteraction();
+                  clearCompletionTimer();
+                  setShowCompletionOverlay(false);
+                  navigation.navigate("Home");
+                }}
+              >
+                <Text style={styles.completionBackHomeText}>Back to Home</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.completionReadAgainButton}
                 onPress={() => {
                   registerUiInteraction();
                   clearCompletionTimer();
@@ -1338,7 +1572,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                   scrollToPage(0);
                 }}
               >
-                <Text style={styles.completionPrimaryText}>Read again</Text>
+                <Text style={styles.completionReadAgainText}>Read again</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1403,31 +1637,46 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
-  completionSecondaryButton: {
+  completionCloseButton: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.14)",
-    backgroundColor: "rgba(47,35,79,0.42)",
+    borderColor: "rgba(255,230,180,0.12)",
+    backgroundColor: "rgba(47,35,79,0.24)",
   },
-  completionSecondaryText: {
+  completionCloseText: {
     fontSize: 13,
-    color: "#CFC5E5",
+    color: "#C2B7DA",
     fontWeight: "600",
+    opacity: 0.85,
     letterSpacing: 0.15,
   },
-  completionPrimaryButton: {
+  completionBackHomeButton: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.24)",
-    backgroundColor: "rgba(67,55,96,0.86)",
+    borderColor: "rgba(255,230,180,0.34)",
+    backgroundColor: "#A78BFA",
   },
-  completionPrimaryText: {
+  completionBackHomeText: {
     fontSize: 13,
-    color: "#F4F1FF",
+    color: "#241A3A",
+    fontWeight: "700",
+    letterSpacing: 0.15,
+  },
+  completionReadAgainButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.2)",
+    backgroundColor: "rgba(67,55,96,0.54)",
+  },
+  completionReadAgainText: {
+    fontSize: 13,
+    color: "#E5DDF8",
     fontWeight: "600",
     letterSpacing: 0.15,
   },
@@ -1472,6 +1721,14 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(255,255,255,0.55)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  readingAsHeaderText: {
+    fontSize: 10,
+    color: "#7A7388",
+    opacity: 0.85,
+    marginBottom: 2,
+    letterSpacing: 0.2,
+    fontWeight: "600",
   },
   progress: { fontSize: 11, opacity: 0.95, color: "#5F5A6D" },
 
@@ -1656,6 +1913,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+  },
+  staticIllustrationImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 0,
   },
   loadingOverlay: {
     position: "absolute",

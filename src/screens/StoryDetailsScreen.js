@@ -2,13 +2,40 @@ import React, { useState } from "react";
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { personalizeStoryForChild } from "../data/storyCatalog";
 
 const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
 
 export default function StoryDetailsScreen({ navigation, route }) {
   const { story, selectedChild } = route?.params || {};
-  const [artStyle, setArtStyle] = useState("magical");
+  const childDisplayName = React.useMemo(() => {
+    if (selectedChild && typeof selectedChild === "object") {
+      if (typeof selectedChild.name === "string" && selectedChild.name.trim()) {
+        return selectedChild.name.trim();
+      }
+      if (selectedChild.id != null && String(selectedChild.id).trim()) {
+        return String(selectedChild.id).trim();
+      }
+    }
+
+    if (typeof selectedChild === "string" && selectedChild.trim()) {
+      return selectedChild.trim();
+    }
+
+    return null;
+  }, [selectedChild]);
+  const [artStyle, setArtStyle] = useState(
+    typeof story?.artStyle === "string" && story.artStyle.trim()
+      ? story.artStyle
+      : "magical"
+  );
   const [resumePageIndex, setResumePageIndex] = useState(null);
+
+  React.useEffect(() => {
+    if (typeof story?.artStyle === "string" && story.artStyle.trim()) {
+      setArtStyle(story.artStyle);
+    }
+  }, [story?.id, story?.artStyle]);
 
   const ART_STYLES = [
     { key: "magical", label: "✨ Magical" },
@@ -96,6 +123,31 @@ export default function StoryDetailsScreen({ navigation, route }) {
     }, [loadProgressForStory])
   );
 
+  const storyForReader = React.useMemo(
+    () => personalizeStoryForChild(story, selectedChild),
+    [story, selectedChild]
+  );
+  const onResume = React.useCallback(() => {
+    navigation.navigate("StoryReader", {
+      storyId: readerIdentity.storyId,
+      story: storyForReader,
+      selectedChild,
+      artStyle,
+      startPageIndex: resumePageIndex != null ? Math.max(0, Math.floor(resumePageIndex)) : 0,
+      forceStart: false,
+    });
+  }, [navigation, readerIdentity.storyId, storyForReader, selectedChild, artStyle, resumePageIndex]);
+  const onStartReading = React.useCallback(() => {
+    navigation.navigate("StoryReader", {
+      storyId: readerIdentity.storyId,
+      story: storyForReader,
+      selectedChild,
+      artStyle,
+      startPageIndex: 0,
+      forceStart: true,
+    });
+  }, [navigation, readerIdentity.storyId, storyForReader, selectedChild, artStyle]);
+
   return (
     <ScrollView
       style={styles.container}
@@ -103,8 +155,11 @@ export default function StoryDetailsScreen({ navigation, route }) {
       showsVerticalScrollIndicator={false}
     >
       <Text style={styles.title}>{story?.title || "Story"}</Text>
+      {childDisplayName ? (
+        <Text style={styles.readingAsText}>Reading as {childDisplayName}</Text>
+      ) : null}
       <Text style={styles.subtitle}>
-        {selectedChild ? `A story for ${selectedChild}` : "A story for you"}
+        {childDisplayName ? `A story for ${childDisplayName}` : "A story for you"}
       </Text>
       <View style={styles.styleSection}>
         <Text style={styles.styleSectionTitle}>Choose the mood</Text>
@@ -127,18 +182,14 @@ export default function StoryDetailsScreen({ navigation, route }) {
       {resumePageIndex != null && (
         <TouchableOpacity
           style={styles.resumeButton}
-          onPress={() =>
-            navigation.navigate("StoryReader", { story, selectedChild, artStyle })
-          }
+          onPress={onResume}
         >
           <Text style={styles.resumeText}>Resume from page {resumePageIndex + 1}</Text>
         </TouchableOpacity>
       )}
       <TouchableOpacity
         style={styles.primaryButton}
-        onPress={() =>
-          navigation.navigate("StoryReader", { story, selectedChild, artStyle })
-        }
+        onPress={onStartReading}
       >
         <Text style={styles.primaryText}>Start Reading</Text>
       </TouchableOpacity>
@@ -180,6 +231,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "500",
     letterSpacing: 0.1,
+  },
+  readingAsText: {
+    fontSize: 12,
+    color: "#CFC5E5",
+    opacity: 0.78,
+    marginBottom: 6,
+    textAlign: "center",
+    letterSpacing: 0.15,
+    fontWeight: "600",
   },
   resumeButton: {
     paddingVertical: 10,

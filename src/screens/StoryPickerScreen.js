@@ -11,18 +11,22 @@ import {
   Alert,
   FlatList,
   Animated,
+  ScrollView,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadStoryCatalog, catalogStoryById } from "../data/storyCatalog";
 
 const STORY_LIBRARY_STORAGE_KEY = "storyLibrary:v1";
 const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
-const DEFAULT_STORIES = [
-  { id: "1", title: "The Brave Little Turtle", createdAt: 1704067200000 },
-  { id: "2", title: "Rocket Dog to the Rescue", createdAt: 1704153600000 },
-  { id: "3", title: "Emma and the Moon Garden", createdAt: 1704240000000 },
-  { id: "4", title: "Noah's Secret Treehouse", createdAt: 1704326400000 },
-  { id: "5", title: "The Library of Laughing Clouds", createdAt: 1704412800000 },
+const CHILD_NAME_PLACEHOLDER = "{{childName}}";
+const DEFAULT_STORIES = loadStoryCatalog();
+const CATALOG_BY_ID = catalogStoryById();
+const COMING_SOON_TITLES = [
+  "{{childName}} Goes to the Aquarium",
+  "{{childName}} Visits the Fire Station",
+  "{{childName}}'s Big Day at the Museum",
+  "{{childName}} Goes to the State Fair",
 ];
 
 const normalizeStories = (inputStories) => {
@@ -40,8 +44,10 @@ const normalizeStories = (inputStories) => {
       const createdAt = Number.isFinite(numericCreatedAt)
         ? numericCreatedAt
         : 1704067200000 + index * 86400000;
+      const catalogStory = CATALOG_BY_ID.get(rawId);
 
       return {
+        ...(catalogStory || {}),
         ...story,
         id: rawId,
         title: rawTitle,
@@ -82,29 +88,68 @@ const normalizeDeletedStories = (inputStories) => {
     .filter(Boolean);
 };
 
+const mergeCatalogStories = (activeStories, deletedStories) => {
+  const safeActiveStories = Array.isArray(activeStories) ? activeStories : [];
+  const safeDeletedStories = Array.isArray(deletedStories) ? deletedStories : [];
+  const activeIds = new Set(safeActiveStories.map((story) => String(story.id)));
+  const deletedIds = new Set(safeDeletedStories.map((story) => String(story.id)));
+
+  const missingCatalogStories = DEFAULT_STORIES.filter(
+    (catalogStory) =>
+      !activeIds.has(String(catalogStory.id)) && !deletedIds.has(String(catalogStory.id))
+  );
+
+  return [...safeActiveStories, ...missingCatalogStories];
+};
+
 const normalizeLibraryState = (storedValue) => {
   if (Array.isArray(storedValue)) {
+    const activeStories = normalizeStories(storedValue);
     return {
-      activeStories: normalizeStories(storedValue),
+      activeStories: mergeCatalogStories(activeStories, []),
       deletedStories: [],
     };
   }
 
   if (storedValue && typeof storedValue === "object") {
+    const activeStories = normalizeStories(storedValue.activeStories);
+    const deletedStories = normalizeDeletedStories(storedValue.deletedStories);
     return {
-      activeStories: normalizeStories(storedValue.activeStories),
-      deletedStories: normalizeDeletedStories(storedValue.deletedStories),
+      activeStories: mergeCatalogStories(activeStories, deletedStories),
+      deletedStories,
     };
   }
 
   return {
-    activeStories: [],
+    activeStories: [...DEFAULT_STORIES],
     deletedStories: [],
   };
 };
 
+const personalizeComingSoonTitle = (title, childName) => {
+  if (typeof title !== "string") return "";
+  if (!childName || typeof childName !== "string") return title;
+  return title.split(CHILD_NAME_PLACEHOLDER).join(childName);
+};
+
 export default function StoryPickerScreen({ navigation, route }) {
   const selectedChild = route?.params?.selectedChild;
+  const childDisplayName = React.useMemo(() => {
+    if (selectedChild && typeof selectedChild === "object") {
+      if (typeof selectedChild.name === "string" && selectedChild.name.trim()) {
+        return selectedChild.name.trim();
+      }
+      if (selectedChild.id != null && String(selectedChild.id).trim()) {
+        return String(selectedChild.id).trim();
+      }
+    }
+
+    if (typeof selectedChild === "string" && selectedChild.trim()) {
+      return selectedChild.trim();
+    }
+
+    return null;
+  }, [selectedChild]);
   const [activeStories, setActiveStories] = React.useState(DEFAULT_STORIES);
   const [deletedStories, setDeletedStories] = React.useState([]);
   const [storiesHydrated, setStoriesHydrated] = React.useState(false);
@@ -501,6 +546,15 @@ export default function StoryPickerScreen({ navigation, route }) {
     () => filteredStories.filter((story) => Number(progressByStory[story.id]) > 0),
     [filteredStories, progressByStory]
   );
+  const comingSoonStories = React.useMemo(
+    () =>
+      COMING_SOON_TITLES.map((title, index) => ({
+        key: `coming-soon:${index + 1}`,
+        title: personalizeComingSoonTitle(title, childDisplayName),
+        isComingSoon: true,
+      })),
+    [childDisplayName]
+  );
 
   const sections = React.useMemo(() => {
     if (isSearching) {
@@ -526,8 +580,13 @@ export default function StoryPickerScreen({ navigation, route }) {
       title: "All Stories",
       data: filteredStories.map((story) => ({ key: `all:${story.id}`, story })),
     });
+    nextSections.push({
+      key: "comingSoon",
+      title: "Coming Soon",
+      data: comingSoonStories,
+    });
     return nextSections;
-  }, [isSearching, continueStories, filteredStories]);
+  }, [isSearching, continueStories, filteredStories, comingSoonStories]);
 
   const isLibraryEmpty = storiesHydrated && sortedStories.length === 0;
   const isSearchEmpty = isSearching && filteredStories.length === 0;
@@ -536,147 +595,166 @@ export default function StoryPickerScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>
-        Choose a story for {selectedChild || "them"}
-      </Text>
-      <Text style={styles.subtitle}>Pick tonight's story</Text>
-
-      <TextInput
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        placeholder="Search stories"
-        placeholderTextColor="rgba(244,241,255,0.50)"
-        style={styles.searchInput}
-        autoCapitalize="none"
-        autoCorrect={false}
-        clearButtonMode="while-editing"
-      />
-
-      <View style={styles.sortRow}>
-        <Text style={styles.sortLabel}>Sort</Text>
-        <View style={styles.sortToggleGroup}>
-          <TouchableOpacity
-            onPress={() => setSortMode("recent")}
-            style={[styles.sortToggleButton, sortMode === "recent" && styles.sortToggleButtonActive]}
-          >
-            <Text style={[styles.sortToggleText, sortMode === "recent" && styles.sortToggleTextActive]}>
-              Recent
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setSortMode("az")}
-            style={[styles.sortToggleButton, sortMode === "az" && styles.sortToggleButtonActive]}
-          >
-            <Text style={[styles.sortToggleText, sortMode === "az" && styles.sortToggleTextActive]}>
-              A-Z
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {isLibraryEmpty ? (
-        <View style={styles.emptyStateWrap}>
-          <Text style={styles.emptyTitle}>No stories yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Create your first story to start your bedtime shelf.
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.mainContent}>
+          <Text style={styles.header}>
+            Choose a story for {childDisplayName || "them"}
           </Text>
-          {deletedStories.length > 0 && (
-            <TouchableOpacity
-              style={styles.emptyRecentlyDeletedButton}
-              onPress={() => setDeletedVisible(true)}
-            >
-              <Text style={styles.emptyRecentlyDeletedText}>
-                Recently Deleted ({deletedStories.length})
+          <Text style={styles.subtitle}>Pick tonight's story</Text>
+
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search stories"
+            placeholderTextColor="rgba(244,241,255,0.50)"
+            style={styles.searchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+
+          <View style={styles.sortRow}>
+            <Text style={styles.sortLabel}>Sort</Text>
+            <View style={styles.sortToggleGroup}>
+              <TouchableOpacity
+                onPress={() => setSortMode("recent")}
+                style={[styles.sortToggleButton, sortMode === "recent" && styles.sortToggleButtonActive]}
+              >
+                <Text style={[styles.sortToggleText, sortMode === "recent" && styles.sortToggleTextActive]}>
+                  Recent
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setSortMode("az")}
+                style={[styles.sortToggleButton, sortMode === "az" && styles.sortToggleButtonActive]}
+              >
+                <Text style={[styles.sortToggleText, sortMode === "az" && styles.sortToggleTextActive]}>
+                  A-Z
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {isLibraryEmpty ? (
+            <View style={styles.emptyStateWrap}>
+              <Text style={styles.emptyTitle}>Choose a story to begin your bedtime adventure.</Text>
+              <Text style={styles.emptySubtitle}>
+                Pick a story and start reading.
               </Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.emptyActionButton}
-            onPress={() => navigation.navigate("Home")}
-          >
-            <Text style={styles.emptyActionButtonText}>Create Story</Text>
-          </TouchableOpacity>
-        </View>
-      ) : isSearchEmpty ? (
-        <View style={styles.emptyStateWrap}>
-          <Text style={styles.emptyTitle}>No matches</Text>
-          <Text style={styles.emptySubtitle}>
-            No stories found for "{displayQuery}"
-          </Text>
-          <TouchableOpacity onPress={() => setSearchQuery("")}>
-            <Text style={styles.clearSearchText}>Clear search</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          {showContinueHint && (
-            <Text style={styles.continueHintText}>Start a story to see it here.</Text>
-          )}
-          <SectionList
-            sections={sections}
-            style={styles.list}
-            keyExtractor={(item) => item.key}
-            contentContainerStyle={styles.listContent}
-            ListFooterComponent={
-              showRecentlyDeletedEntry ? (
+              {deletedStories.length > 0 && (
                 <TouchableOpacity
-                  style={styles.recentlyDeletedRow}
+                  style={styles.emptyRecentlyDeletedButton}
                   onPress={() => setDeletedVisible(true)}
                 >
-                  <Text style={styles.recentlyDeletedText}>
+                  <Text style={styles.emptyRecentlyDeletedText}>
                     Recently Deleted ({deletedStories.length})
                   </Text>
                 </TouchableOpacity>
-              ) : (
-                <View style={styles.listFooterSpacer} />
-              )
-            }
-            renderSectionHeader={({ section }) => (
-              <Text
-                style={[
-                  styles.sectionHeader,
-                  section.key === "continue" ? styles.sectionHeaderFirst : styles.sectionHeaderDefault,
-                ]}
+              )}
+              <TouchableOpacity
+                style={styles.emptyActionButton}
+                onPress={() => navigation.navigate("StoryPicker", { selectedChild })}
               >
-                {section.title}
+                <Text style={styles.emptyActionButtonText}>Choose a Story</Text>
+              </TouchableOpacity>
+            </View>
+          ) : isSearchEmpty ? (
+            <View style={styles.emptyStateWrap}>
+              <Text style={styles.emptyTitle}>No matches</Text>
+              <Text style={styles.emptySubtitle}>
+                No stories found for "{displayQuery}"
               </Text>
-            )}
-            renderItem={({ item }) => {
-              const savedPageIndex = Number(progressByStory[item.story.id]);
-              const hasProgress = Number.isFinite(savedPageIndex) && savedPageIndex >= 0;
-              const savedTotalPages = Number(progressTotalPagesByStory[item.story.id]);
-              const fallbackTotalPages = Array.isArray(item.story?.pages)
-                ? item.story.pages.length
-                : 0;
-              const totalPagesForStory = Number.isFinite(savedTotalPages) && savedTotalPages > 0
-                ? savedTotalPages
-                : fallbackTotalPages;
-              const progressPercent = hasProgress && totalPagesForStory > 0
-                ? (Math.floor(savedPageIndex) + 1) / totalPagesForStory
-                : null;
-              const progressStatus = !hasProgress
-                ? null
-                : Number.isFinite(progressPercent) && progressPercent >= 1
-                ? "Finished"
-                : "In progress";
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Text style={styles.clearSearchText}>Clear search</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {showContinueHint && (
+                <Text style={styles.continueHintText}>Start a story to see it here.</Text>
+              )}
+              <SectionList
+                sections={sections}
+                style={styles.list}
+                scrollEnabled={false}
+                keyExtractor={(item) => item.key}
+                contentContainerStyle={styles.listContent}
+                ListFooterComponent={
+                  showRecentlyDeletedEntry ? (
+                    <TouchableOpacity
+                      style={styles.recentlyDeletedRow}
+                      onPress={() => setDeletedVisible(true)}
+                    >
+                      <Text style={styles.recentlyDeletedText}>
+                        Recently Deleted ({deletedStories.length})
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.listFooterSpacer} />
+                  )
+                }
+                renderSectionHeader={({ section }) => (
+                  <Text
+                    style={[
+                      styles.sectionHeader,
+                      section.key === "continue" ? styles.sectionHeaderFirst : styles.sectionHeaderDefault,
+                    ]}
+                  >
+                    {section.title}
+                  </Text>
+                )}
+                renderItem={({ item }) => {
+                  if (item?.isComingSoon) {
+                    return (
+                      <View style={[styles.storyCard, styles.comingSoonCard]}>
+                        <Text style={[styles.storyTitle, styles.comingSoonTitle]}>
+                          {"\u{1F4D6} "}{item.title}
+                        </Text>
+                      </View>
+                    );
+                  }
 
-              return (
-                <TouchableOpacity
-                  onPress={() => openStory(item.story)}
-                  onLongPress={() => openStoryActions(item.story)}
-                  delayLongPress={280}
-                  style={styles.storyCard}
-                >
-                  <Text style={styles.storyTitle}>{"\u{1F4D6} "}{item.story.title}</Text>
-                  {progressStatus ? (
-                    <Text style={styles.progressStatusText}>{progressStatus}</Text>
-                  ) : null}
-                </TouchableOpacity>
-              );
-            }}
-          />
-        </>
-      )}
+                  const savedPageIndex = Number(progressByStory[item.story.id]);
+                  const hasProgress = Number.isFinite(savedPageIndex) && savedPageIndex >= 0;
+                  const savedTotalPages = Number(progressTotalPagesByStory[item.story.id]);
+                  const fallbackTotalPages = Array.isArray(item.story?.pages)
+                    ? item.story.pages.length
+                    : 0;
+                  const totalPagesForStory = Number.isFinite(savedTotalPages) && savedTotalPages > 0
+                    ? savedTotalPages
+                    : fallbackTotalPages;
+                  const progressPercent = hasProgress && totalPagesForStory > 0
+                    ? (Math.floor(savedPageIndex) + 1) / totalPagesForStory
+                    : null;
+                  const progressStatus = !hasProgress
+                    ? null
+                    : Number.isFinite(progressPercent) && progressPercent >= 1
+                    ? "Finished"
+                    : "In progress";
+
+                  return (
+                    <TouchableOpacity
+                      onPress={() => openStory(item.story)}
+                      onLongPress={() => openStoryActions(item.story)}
+                      delayLongPress={280}
+                      style={styles.storyCard}
+                    >
+                      <Text style={styles.storyTitle}>{"\u{1F4D6} "}{item.story.title}</Text>
+                      {progressStatus ? (
+                        <Text style={styles.progressStatusText}>{progressStatus}</Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </>
+          )}
+        </View>
+      </ScrollView>
 
       <Modal
         transparent
@@ -828,6 +906,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#241A3A",
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
+  },
+  mainContent: {
+    flexGrow: 1,
     padding: 20,
     paddingTop: 24,
   },
@@ -900,7 +988,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   list: {
-    flex: 1,
+    width: "100%",
   },
   listContent: {
     paddingBottom: 32,
@@ -961,6 +1049,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#F4F1FF",
     letterSpacing: 0.2,
+  },
+  comingSoonCard: {
+    opacity: 0.72,
+  },
+  comingSoonTitle: {
+    color: "#D9D0EC",
   },
   progressStatusText: {
     marginTop: 7,
