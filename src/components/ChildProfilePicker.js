@@ -6,10 +6,9 @@ const profiles = ['Emma', 'Noah'];
 export default function ChildProfilePicker({ onSelectChild }) {
   const [selected, setSelected] = useState(null);
 
-    const onSelect = (name) => {
+  const onSelect = (name) => {
     setSelected(name);
     if (onSelectChild) onSelectChild(name);
-    console.log('Selected profile:', name);
   };
 
   return (

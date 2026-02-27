@@ -1,10 +1,9 @@
-import React from 'react';
+﻿import React from 'react';
 import AppNavigator from './src/navigation/AppNavigator';
 
-// 🧯 TEMP DEBUG — global crash logger
+// ðŸ§¯ TEMP DEBUG â€” global crash logger
 const logErr = (...args) => {
   try {
-    console.log("🧯GLOBAL_ERR:", ...args);
   } catch {}
 };
 

@@ -131,7 +131,7 @@ export default function HomeScreen({ selectedProfile }) {
 
           const storyId = key.slice(READER_PROGRESS_PREFIX.length, key.length - suffix.length);
           const story = storyById.get(storyId);
-          if (!story) return;
+          if (!story || story.isComingSoon) return;
 
           const progressTotalPages = Number(parsed?.totalPages);
           const storyPagesCount = Array.isArray(story.pages) ? story.pages.length : 0;

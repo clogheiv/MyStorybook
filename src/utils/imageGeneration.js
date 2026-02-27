@@ -166,7 +166,7 @@ async function generateImageFromAI(
   prompt,
   storyTitle,
   artStyle = "magical",
-  options = {}_
+  options = {}
 ) {
   const { storyId, childId, pageIndex } = options;
 
