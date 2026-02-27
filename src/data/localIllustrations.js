@@ -1,4 +1,4 @@
-const DEFAULT_ILLUSTRATION = require("../../assets/icon.png");
+const DEFAULT_ILLUSTRATION = require("../../assets/adaptive-icon.png");
 
 const padIndex = (index) => String(index).padStart(2, "0");
 

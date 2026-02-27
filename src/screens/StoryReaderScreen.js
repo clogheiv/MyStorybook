@@ -22,6 +22,7 @@ import * as Haptics from "expo-haptics";
 import { useFonts } from "expo-font";
 import { Nunito_400Regular } from "@expo-google-fonts/nunito";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { catalogStoryById } from "../data/storyCatalog";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
 import { resolveLocalIllustrationAsset } from "../data/localIllustrations";
 
@@ -221,9 +222,44 @@ const replaceChildNameToken = (input, childName) => {
 const buildSequentialIllustrationName = (prefix, index) =>
   `${prefix}_${String(index + 1).padStart(2, "0")}.png`;
 
+const toImageSource = (val) => {
+  // local require(...) returns a NUMBER
+  if (typeof val === "number") return val;
+  // remote/local file path string should be treated as uri
+  if (typeof val === "string" && val.length) return { uri: val };
+  return null;
+};
+
 export default function StoryReaderScreen({ navigation, route }) {
   // All hooks must be at the top level, in the same order every render
-  const { story, selectedChild, artStyle, startPageIndex, forceStart } = route?.params || {};
+  const {
+    story: routeStory,
+    storyId: routeStoryId,
+    selectedChild,
+    artStyle,
+    startPageIndex,
+    forceStart,
+  } = route?.params || {};
+  const storyCatalogById = React.useMemo(() => catalogStoryById(), []);
+  const story = React.useMemo(() => {
+    const normalizedRouteStoryId =
+      routeStoryId != null && String(routeStoryId).trim() ? String(routeStoryId).trim() : null;
+    const normalizedStoryId =
+      routeStory?.id != null && String(routeStory.id).trim() ? String(routeStory.id).trim() : null;
+    const lookupId = normalizedRouteStoryId || normalizedStoryId;
+    const catalogStory = lookupId ? storyCatalogById.get(lookupId) || null : null;
+
+    if (routeStory && typeof routeStory === "object") {
+      return {
+        ...(catalogStory || {}),
+        ...routeStory,
+        ...(lookupId ? { id: lookupId } : {}),
+      };
+    }
+
+    return catalogStory;
+  }, [routeStory, routeStoryId, storyCatalogById]);
+  const hasValidPages = Array.isArray(story?.pages) && story.pages.length > 0;
   const [fontsLoaded] = useFonts({
     Nunito: Nunito_400Regular,
   });
@@ -1041,9 +1077,6 @@ export default function StoryReaderScreen({ navigation, route }) {
         ),
         persistStoryProgress(latestPageIndex),
       ])
-        .then(() => {
-          console.log(`[readerProgress] saved page ${latestPageIndex} for ${progressStorageKey}`);
-        })
         .catch((error) => {
           console.warn("Failed to save reader progress on unmount", error);
         });
@@ -1084,11 +1117,6 @@ export default function StoryReaderScreen({ navigation, route }) {
         // Optional: childName, characterHints, toneHint can be passed if available
       });
 
-      // Log prompt in dev for verification
-      if (__DEV__) {
-        console.log(`[${k}] prompt:`, prompt);
-      }
-
       // Call image generation (structured for easy real API swap)
       const imageUrl = await generateImageFromAI(prompt, story?.title, artStyle, {
         storyId: readerIdentity.storyId,
@@ -1105,7 +1133,6 @@ export default function StoryReaderScreen({ navigation, route }) {
         retryNonce != null && !isPlaceholderToken
           ? `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}retry=${retryNonce}`
           : imageUrl;
-      console.log("[IMG]", { index, artStyle, uri: resolvedUrl });
 
       setPageImages((prev) => ({ ...prev, [k]: resolvedUrl }));
       // clear failed flag on success
@@ -1251,6 +1278,8 @@ export default function StoryReaderScreen({ navigation, route }) {
               {(() => {
                 const k = keyFor(index, artStyle);
                 const staticIllustrationSource = item?.illustrationAssetSource;
+                const illustrationValue = staticIllustrationSource;
+                const imgSource = toImageSource(illustrationValue);
                 const hasStaticIllustration = Boolean(item?.illustrationAssetName);
                 const img = pageImages[k];
                 const loading = loadingImages[k];
@@ -1260,12 +1289,14 @@ export default function StoryReaderScreen({ navigation, route }) {
                 const placeholderPayload = parsePlaceholderPayload(img);
                 return (
                   <>
-                    {staticIllustrationSource ? (
-                      <Image
-                        source={staticIllustrationSource}
-                        style={styles.staticIllustrationImage}
-                        resizeMode="cover"
-                      />
+                    {imgSource ? (
+                      <View style={styles.staticIllustrationContainer}>
+                        <Image
+                          source={imgSource}
+                          style={styles.staticIllustrationImage}
+                          resizeMode="cover"
+                        />
+                      </View>
                     ) : null}
                     {!hasStaticIllustration && loading && (
                       <View style={styles.loadingOverlay}>
@@ -1351,6 +1382,48 @@ export default function StoryReaderScreen({ navigation, route }) {
       </View>
     );
   };
+
+  if (!story || !hasValidPages) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ fontSize: 18, fontWeight: "600", textAlign: "center", marginBottom: 8 }}>
+          We couldn't find this story.
+        </Text>
+        <Text style={{ fontSize: 14, opacity: 0.8, textAlign: "center", marginBottom: 20 }}>
+          It may have been removed or your reading data is out of date.
+        </Text>
+
+        <Pressable
+          onPress={() => navigation.navigate("Home")}
+          style={{
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: 12,
+            width: "100%",
+            alignItems: "center",
+            marginBottom: 12,
+            borderWidth: 1,
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "600" }}>Go Home</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => navigation.navigate("StoryPicker")}
+          style={{
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: 12,
+            width: "100%",
+            alignItems: "center",
+            borderWidth: 1,
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "600" }}>Choose a Story</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (!isHydrated) {
     return (
@@ -1914,10 +1987,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  staticIllustrationContainer: {
+    width: "100%",
+    height: 220,
+    overflow: "hidden",
+    borderRadius: 16,
+  },
   staticIllustrationImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 0,
   },
   loadingOverlay: {
     position: "absolute",
