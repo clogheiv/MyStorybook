@@ -585,7 +585,12 @@ export default function StoryPickerScreen({ navigation, route }) {
       title: "Coming Soon",
       data: comingSoonStories,
     });
-    return nextSections;
+    return nextSections
+      .map((section) => ({
+        ...section,
+        data: section.data.filter((item) => !item?.isComingSoon),
+      }))
+      .filter((section) => section.data.length > 0);
   }, [isSearching, continueStories, filteredStories, comingSoonStories]);
 
   const isLibraryEmpty = storiesHydrated && sortedStories.length === 0;
