@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  CHARACTER_STYLE_OPTIONS,
+  characterStyleFromLegacyData,
+} from "../data/characterStyles";
 
 export default function ProfilesScreen({
   navigation,
@@ -15,6 +19,7 @@ export default function ProfilesScreen({
   onSelectProfile,
   onDeleteProfile,
   onResetAllData,
+  onUpdateProfileGender,
 }) {
   React.useEffect(() => {
     if (profiles.length > 0) return;
@@ -24,6 +29,10 @@ export default function ProfilesScreen({
       routes: [{ name: "AddChild" }],
     });
   }, [navigation, profiles.length]);
+  const selectedProfile = React.useMemo(
+    () => profiles.find((profile) => profile.id === selectedProfileId) || null,
+    [profiles, selectedProfileId]
+  );
 
   const onPressProfile = React.useCallback(
     async (profileId) => {
@@ -89,6 +98,28 @@ export default function ProfilesScreen({
     );
   }, [navigation, onResetAllData]);
 
+  const chooseStoryForSelectedProfile = React.useCallback(() => {
+    if (!selectedProfile) return;
+    navigation.navigate("StoryPicker", { selectedChild: selectedProfile });
+  }, [navigation, selectedProfile]);
+
+  const updateSelectedCharacterStyle = React.useCallback(
+    async (characterStyle) => {
+      if (!selectedProfile || typeof onUpdateProfileGender !== "function") return;
+      try {
+        await onUpdateProfileGender(selectedProfile.id, characterStyle);
+      } catch {
+        // Keep profile management responsive if persistence fails.
+      }
+    },
+    [onUpdateProfileGender, selectedProfile]
+  );
+
+  const selectedCharacterStyle = React.useMemo(
+    () => characterStyleFromLegacyData(selectedProfile),
+    [selectedProfile]
+  );
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -129,6 +160,48 @@ export default function ProfilesScreen({
               );
             })}
           </View>
+
+          {selectedProfile ? (
+            <>
+              <View style={styles.characterStylePanel}>
+                <Text style={styles.characterStyleLabel}>Character Style</Text>
+                <View style={styles.characterStyleSelector}>
+                  {CHARACTER_STYLE_OPTIONS.map((option) => {
+                    const isSelected = option.key === selectedCharacterStyle;
+                    return (
+                      <TouchableOpacity
+                        key={option.key}
+                        style={[
+                          styles.characterStyleButton,
+                          isSelected && styles.characterStyleButtonSelected,
+                        ]}
+                        onPress={() => updateSelectedCharacterStyle(option.key)}
+                      >
+                        <Text style={styles.characterStyleIcon}>{option.icon}</Text>
+                        <Text
+                          style={[
+                            styles.characterStyleButtonText,
+                            isSelected && styles.characterStyleButtonTextSelected,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.primaryContinueButton}
+                onPress={chooseStoryForSelectedProfile}
+              >
+                <Text style={styles.primaryContinueText}>Choose a Story</Text>
+                <Text style={styles.primaryContinueSubtext}>
+                  Reading as {selectedProfile.name}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
 
           <View style={styles.actionsRow}>
             <TouchableOpacity
@@ -234,6 +307,85 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#F4F1FF",
     letterSpacing: 0.2,
+  },
+  characterStylePanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.14)",
+    backgroundColor: "rgba(47,35,79,0.42)",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  characterStyleLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#CFC5E5",
+    opacity: 0.86,
+    letterSpacing: 0.2,
+    marginBottom: 8,
+  },
+  characterStyleSelector: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  characterStyleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.18)",
+    backgroundColor: "rgba(47,35,79,0.58)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  characterStyleButtonSelected: {
+    borderColor: "rgba(255,230,180,0.36)",
+    backgroundColor: "rgba(167,139,250,0.24)",
+  },
+  characterStyleIcon: {
+    fontSize: 16,
+  },
+  characterStyleButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#CFC5E5",
+    letterSpacing: 0.15,
+  },
+  characterStyleButtonTextSelected: {
+    color: "#F4F1FF",
+  },
+  primaryContinueButton: {
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.36)",
+    backgroundColor: "#A78BFA",
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  primaryContinueText: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#241A3A",
+    letterSpacing: 0.2,
+    marginBottom: 3,
+  },
+  primaryContinueSubtext: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(36,26,58,0.72)",
+    letterSpacing: 0.15,
   },
   deleteButton: {
     borderRadius: 999,

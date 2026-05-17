@@ -44,14 +44,15 @@ const normalizeStory = (story, index, catalogById) => {
   if (!rawId || !rawTitle) return null;
 
   const catalogStory = catalogById.get(rawId);
+  if (!catalogStory) return null;
   const numericCreatedAt = Number(story.createdAt);
   const createdAt = Number.isFinite(numericCreatedAt)
     ? numericCreatedAt
     : 1704067200000 + index * 86400000;
 
   return {
-    ...(catalogStory || {}),
     ...story,
+    ...(catalogStory || {}),
     id: rawId,
     title: rawTitle,
     createdAt,
@@ -107,9 +108,9 @@ export default function HomeScreen({ selectedProfile }) {
         }
       }
 
-      const suffix = `:${childId}`;
+      const progressKeyPrefix = `${READER_PROGRESS_PREFIX}${childId}:`;
       const progressKeys = allKeys.filter(
-        (key) => key.startsWith(READER_PROGRESS_PREFIX) && key.endsWith(suffix)
+        (key) => key.startsWith(progressKeyPrefix)
       );
       if (progressKeys.length === 0) {
         setContinueEntry(null);
@@ -129,7 +130,7 @@ export default function HomeScreen({ selectedProfile }) {
           const savedPageIndex = Number(parsed?.pageIndex);
           if (!Number.isFinite(savedPageIndex) || savedPageIndex < 0) return;
 
-          const storyId = key.slice(READER_PROGRESS_PREFIX.length, key.length - suffix.length);
+          const storyId = key.slice(progressKeyPrefix.length);
           const story = storyById.get(storyId);
           if (!story || story.isComingSoon) return;
 
@@ -194,15 +195,14 @@ export default function HomeScreen({ selectedProfile }) {
     if (!selectedChild) return;
     navigation.navigate("StoryPicker", { selectedChild });
   }, [navigation, selectedChild]);
-  const onReadTonight = React.useCallback(() => {
-    if (!selectedChild) return;
-    if (continueEntry) {
-      openContinueReading();
-      return;
-    }
-
-    openStoryCatalog();
-  }, [continueEntry, openContinueReading, openStoryCatalog, selectedChild]);
+  const personalizedContinueStory = React.useMemo(
+    () => (continueEntry?.story ? personalizeStoryForChild(continueEntry.story, selectedChild) : null),
+    [continueEntry?.story, selectedChild]
+  );
+  const continueTitle =
+    typeof personalizedContinueStory?.title === "string" && personalizedContinueStory.title.trim()
+      ? personalizedContinueStory.title.trim()
+      : "your story";
 
   return (
     <KeyboardAvoidingView
@@ -228,36 +228,14 @@ export default function HomeScreen({ selectedProfile }) {
             ) : null}
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.readTonightButton,
-              !selectedChild ? styles.readTonightButtonDisabled : null,
-            ]}
-            onPress={onReadTonight}
-            disabled={!selectedChild}
-          >
-            <Text style={styles.readTonightButtonText}>Read Tonight</Text>
-          </TouchableOpacity>
-
           {continueEntry ? (
             <TouchableOpacity style={styles.continueButton} onPress={openContinueReading}>
               <Text numberOfLines={1} style={styles.continueTitle}>
-                Continue {continueEntry.story?.title || "your story"}
+                Continue {continueTitle}
               </Text>
               <Text style={styles.continueMeta}>Page {continueEntry.pageIndex + 1}</Text>
             </TouchableOpacity>
-          ) : (
-            <View style={styles.continueEmptyCard}>
-              <Text style={styles.continueEmptyText}>Ready for a story tonight?</Text>
-              <TouchableOpacity
-                style={styles.continueEmptyAction}
-                onPress={openStoryCatalog}
-                disabled={!selectedChild}
-              >
-                <Text style={styles.continueEmptyActionText}>Choose a story</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          ) : null}
 
           <TouchableOpacity
             style={styles.manageProfilesButton}
@@ -332,32 +310,6 @@ const styles = StyleSheet.create({
     color: "#DCD2F3",
     letterSpacing: 0.2,
   },
-  readTonightButton: {
-    width: "100%",
-    borderRadius: 16,
-    backgroundColor: "#C5B0FF",
-    borderWidth: 1,
-    borderColor: "rgba(255,240,214,0.35)",
-    paddingVertical: 18,
-    paddingHorizontal: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  readTonightButtonDisabled: {
-    opacity: 0.5,
-  },
-  readTonightButtonText: {
-    fontSize: 19,
-    fontWeight: "700",
-    color: "#23193B",
-    letterSpacing: 0.2,
-  },
   continueButton: {
     borderRadius: 16,
     borderWidth: 1,
@@ -380,38 +332,6 @@ const styles = StyleSheet.create({
     opacity: 0.86,
     letterSpacing: 0.15,
     fontWeight: "600",
-  },
-  continueEmptyCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.16)",
-    backgroundColor: "rgba(61,49,95,0.56)",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-    alignItems: "center",
-  },
-  continueEmptyText: {
-    fontSize: 14,
-    color: "#D8CEE9",
-    opacity: 0.9,
-    fontWeight: "600",
-    letterSpacing: 0.15,
-    marginBottom: 10,
-  },
-  continueEmptyAction: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.22)",
-    backgroundColor: "rgba(47,35,79,0.5)",
-  },
-  continueEmptyActionText: {
-    fontSize: 12,
-    color: "#E8DFF9",
-    fontWeight: "600",
-    letterSpacing: 0.15,
   },
   chooseStoryButton: {
     backgroundColor: "#A78BFA",

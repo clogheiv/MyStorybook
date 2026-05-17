@@ -4,8 +4,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { personalizeStoryForChild } from "../data/storyCatalog";
 
-const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
-
 export default function StoryDetailsScreen({ navigation, route }) {
   const { story, selectedChild } = route?.params || {};
   const childDisplayName = React.useMemo(() => {
@@ -37,13 +35,6 @@ export default function StoryDetailsScreen({ navigation, route }) {
     }
   }, [story?.id, story?.artStyle]);
 
-  const ART_STYLES = [
-    { key: "magical", label: "✨ Magical" },
-    { key: "bold_adventure", label: "🐉 Bold" },
-    { key: "cozy", label: "🏠 Cozy" },
-    { key: "classic", label: "📖 Classic" },
-  ];
-
   const readerIdentity = React.useMemo(() => {
     const storyId =
       story?.id != null && String(story.id).trim()
@@ -66,7 +57,7 @@ export default function StoryDetailsScreen({ navigation, route }) {
     return { storyId, childId };
   }, [story?.id, story?.title, selectedChild]);
   const progressStorageKey = React.useMemo(
-    () => `readerProgress:${readerIdentity.storyId}:${readerIdentity.childId}`,
+    () => `readerProgress:${readerIdentity.childId}:${readerIdentity.storyId}`,
     [readerIdentity]
   );
 
@@ -78,20 +69,6 @@ export default function StoryDetailsScreen({ navigation, route }) {
     }
 
     try {
-      // Primary source: shared story progress map (used by Story Library).
-      const sharedRaw = await AsyncStorage.getItem(STORY_PROGRESS_STORAGE_KEY);
-      if (sharedRaw) {
-        const parsedShared = JSON.parse(sharedRaw);
-        if (parsedShared && typeof parsedShared === "object" && !Array.isArray(parsedShared)) {
-          const sharedIndex = Number(parsedShared[storyId]);
-          if (Number.isFinite(sharedIndex) && sharedIndex >= 0) {
-            setResumePageIndex(Math.floor(sharedIndex));
-            return;
-          }
-        }
-      }
-
-      // Fallback to reader-specific key for backward compatibility.
       const raw = await AsyncStorage.getItem(progressStorageKey);
       if (!raw) {
         setResumePageIndex(null);
@@ -154,31 +131,13 @@ export default function StoryDetailsScreen({ navigation, route }) {
       contentContainerStyle={styles.containerContent}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>{story?.title || "Story"}</Text>
+      <Text style={styles.title}>{storyForReader?.title || story?.title || "Story"}</Text>
       {childDisplayName ? (
         <Text style={styles.readingAsText}>Reading as {childDisplayName}</Text>
       ) : null}
       <Text style={styles.subtitle}>
         {childDisplayName ? `A story for ${childDisplayName}` : "A story for you"}
       </Text>
-      <View style={styles.styleSection}>
-        <Text style={styles.styleSectionTitle}>Choose the mood</Text>
-        <View style={styles.styleSelector}>
-          {ART_STYLES.map((style) => (
-            <TouchableOpacity
-              key={style.key}
-              style={[styles.styleButton, artStyle === style.key && styles.styleButtonActive]}
-              onPress={() => setArtStyle(style.key)}
-            >
-              <Text
-                style={[styles.styleButtonText, artStyle === style.key && styles.styleButtonTextActive]}
-              >
-                {style.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
       {resumePageIndex != null && (
         <TouchableOpacity
           style={styles.resumeButton}
@@ -287,52 +246,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     opacity: 0.75,
     color: "#F4F1FF",
-  },
-  styleSection: {
-    width: "100%",
-    marginTop: 18,
-    marginBottom: 18,
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  styleSectionTitle: {
-    fontSize: 15,
-    color: "#F4F1FF",
-    opacity: 0.8,
-    marginBottom: 10,
-    fontWeight: "600",
-    letterSpacing: 0.1,
-    textAlign: "center",
-  },
-  styleSelector: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 12,
-    marginBottom: 0,
-  },
-  styleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: "rgba(42,31,71,0.8)",
-    borderWidth: 1,
-    borderColor: "rgba(160,120,255,0.2)",
-    marginRight: 0,
-    marginBottom: 10,
-  },
-  styleButtonActive: {
-    backgroundColor: "rgba(167,139,250,0.2)",
-    borderColor: "rgba(167,139,250,0.6)",
-  },
-  styleButtonText: {
-    fontSize: 13,
-    opacity: 0.7,
-    color: "#F4F1FF",
-  },
-  styleButtonTextActive: {
-    opacity: 1,
-    fontWeight: "600",
-    color: "#A78BFA",
   },
 });

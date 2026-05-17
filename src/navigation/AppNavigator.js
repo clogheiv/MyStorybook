@@ -10,6 +10,10 @@ import StoryDetailsScreen from "../screens/StoryDetailsScreen";
 import AddChildScreen from "../screens/AddChildScreen";
 import SelectChildScreen from "../screens/SelectChildScreen";
 import ProfilesScreen from "../screens/ProfilesScreen";
+import {
+  characterStyleFromLegacyData,
+  normalizeCharacterStyle,
+} from "../data/characterStyles";
 
 const Stack = createNativeStackNavigator();
 
@@ -34,7 +38,14 @@ const normalizeProfiles = (inputProfiles) => {
         ? parsedCreatedAt
         : Date.now();
 
-      return { id, name, createdAt };
+      const normalizedProfile = {
+        id,
+        name,
+        gender: characterStyleFromLegacyData(profile),
+        createdAt,
+      };
+
+      return normalizedProfile;
     })
     .filter(Boolean);
 };
@@ -62,6 +73,9 @@ export default function AppNavigator() {
 
         const parsedProfiles = profilesRaw ? JSON.parse(profilesRaw) : [];
         const normalizedProfiles = normalizeProfiles(parsedProfiles);
+        if (profilesRaw && JSON.stringify(parsedProfiles) !== JSON.stringify(normalizedProfiles)) {
+          await AsyncStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(normalizedProfiles));
+        }
         const rawSelectedId =
           typeof selectedProfileIdRaw === "string" && selectedProfileIdRaw.trim()
             ? selectedProfileIdRaw.trim()
@@ -110,13 +124,14 @@ export default function AppNavigator() {
   }, []);
 
   const onAddProfile = React.useCallback(
-    async (name) => {
+    async (name, gender) => {
       const normalizedName = typeof name === "string" ? name.trim() : "";
       if (!normalizedName) return null;
 
       const newProfile = {
         id: buildProfileId(),
         name: normalizedName,
+        gender: normalizeCharacterStyle(gender),
         createdAt: Date.now(),
       };
       const nextProfiles = [...profiles, newProfile];
@@ -142,6 +157,23 @@ export default function AppNavigator() {
       return true;
     },
     [persistSelectedProfileId, profiles]
+  );
+
+  const onUpdateProfileGender = React.useCallback(
+    async (profileId, gender) => {
+      if (!profileId || !profiles.some((profile) => profile.id === profileId)) {
+        return false;
+      }
+
+      const nextProfiles = profiles.map((profile) =>
+        profile.id === profileId
+          ? { ...profile, gender: normalizeCharacterStyle(gender) }
+          : profile
+      );
+      await persistProfiles(nextProfiles);
+      return true;
+    },
+    [persistProfiles, profiles]
   );
 
   const onDeleteProfile = React.useCallback(
@@ -256,6 +288,7 @@ export default function AppNavigator() {
               onSelectProfile={onSelectProfile}
               onDeleteProfile={onDeleteProfile}
               onResetAllData={onResetAllData}
+              onUpdateProfileGender={onUpdateProfileGender}
             />
           )}
         </Stack.Screen>

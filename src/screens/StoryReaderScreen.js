@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   Pressable,
@@ -23,8 +24,12 @@ import { useFonts } from "expo-font";
 import { Nunito_400Regular } from "@expo-google-fonts/nunito";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { catalogStoryById } from "../data/storyCatalog";
+import { characterStyleFromLegacyData } from "../data/characterStyles";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
-import { resolveLocalIllustrationAsset } from "../data/localIllustrations";
+import {
+  resolveLocalIllustrationAsset,
+  resolveStoryPageIllustrationAsset,
+} from "../data/localIllustrations";
 
 // Create AnimatedFlatList OUTSIDE component to maintain stable identity
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
@@ -34,16 +39,15 @@ const OUTER_BG = "#2F2B45";
 const READER_BACKDROP = "#F1EEE6";
 const PAGE_COLOR = "#F7F4ED";
 const INK = "#1E1B2E";
-const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
 const COMPLETION_DELAY_MS = 30000;
 const PAGE_INITIAL_RENDER_COUNT = 2;
 const PAGE_BATCH_RENDER_COUNT = 3;
 const PAGE_WINDOW_SIZE = 5;
-const CHILD_NAME_TOKEN = "{{childName}}";
+const CHILD_NAME_TOKEN_PATTERN = /{{\s*(childName|child['’]s name)\s*}}/gi;
 const DEMO_ILLUSTRATION_PREFIX = "zoo";
 
 const DEMO_PAGES = [
-  "The morning sun peeked in, and {{childName}} opened their eyes with a smile.",
+  "The morning sun peeked in, and {{childName}} woke with a smile.",
   "\"Today's the day,\" {{childName}} whispered. \"We're going to the zoo.\"",
   "In the kitchen, {{childName}} found a warm breakfast waiting.",
   "{{childName}} packed a small backpack with a juice box, an apple, and a favorite toy.",
@@ -216,7 +220,7 @@ const resolveChildName = (selectedChild) => {
 
 const replaceChildNameToken = (input, childName) => {
   if (typeof input !== "string") return input;
-  return input.split(CHILD_NAME_TOKEN).join(childName);
+  return input.replace(CHILD_NAME_TOKEN_PATTERN, childName);
 };
 
 const buildSequentialIllustrationName = (prefix, index) =>
@@ -228,6 +232,17 @@ const toImageSource = (val) => {
   // remote/local file path string should be treated as uri
   if (typeof val === "string" && val.length) return { uri: val };
   return null;
+};
+
+const resolveBundledIllustrationUri = (assetSource) => {
+  if (typeof assetSource !== "number") return null;
+  const resolvedSource =
+    typeof Image.resolveAssetSource === "function"
+      ? Image.resolveAssetSource(assetSource)
+      : null;
+  return typeof resolvedSource?.uri === "string" && resolvedSource.uri
+    ? resolvedSource.uri
+    : null;
 };
 
 export default function StoryReaderScreen({ navigation, route }) {
@@ -316,6 +331,17 @@ export default function StoryReaderScreen({ navigation, route }) {
     () => resolveChildName(selectedChild),
     [selectedChild]
   );
+  const selectedGender = React.useMemo(
+    () =>
+      selectedChild && typeof selectedChild === "object"
+        ? characterStyleFromLegacyData(selectedChild)
+        : "boy",
+    [selectedChild]
+  );
+  const displayStoryTitle = React.useMemo(
+    () => replaceChildNameToken(story?.title || "Story", childNameForStory),
+    [childNameForStory, story?.title]
+  );
   const pages = React.useMemo(
     () => {
       const sourcePages = story?.pages;
@@ -339,15 +365,32 @@ export default function StoryReaderScreen({ navigation, route }) {
               const basePrompt = typeof page.prompt === "string" && page.prompt.trim()
                 ? page.prompt
                 : page.text;
+              const hasStoryIllustrationReference =
+                typeof page.illustrationStoryId === "string" &&
+                page.illustrationStoryId.trim() &&
+                Number.isFinite(Number(page.illustrationPageNumber));
               const illustrationAssetName =
                 typeof page.illustrationAssetName === "string" && page.illustrationAssetName.trim()
                   ? page.illustrationAssetName.trim()
+                  : hasStoryIllustrationReference
+                  ? null
                   : buildSequentialIllustrationName(DEMO_ILLUSTRATION_PREFIX, index);
+              const storyIllustrationSource = resolveStoryPageIllustrationAsset({
+                storyId: page.illustrationStoryId,
+                pageNumber: page.illustrationPageNumber,
+                gender: selectedGender,
+              });
               return {
                 text: replaceChildNameToken(page.text, childNameForStory),
                 prompt: replaceChildNameToken(basePrompt, childNameForStory),
                 illustrationAssetName,
-                illustrationAssetSource: resolveLocalIllustrationAsset(illustrationAssetName),
+                illustrationStoryId: page.illustrationStoryId,
+                illustrationPageNumber: page.illustrationPageNumber,
+                illustrationAssetSource:
+                  storyIllustrationSource ||
+                  (illustrationAssetName
+                    ? resolveLocalIllustrationAsset(illustrationAssetName)
+                    : null),
               };
             }
             return null;
@@ -373,12 +416,12 @@ export default function StoryReaderScreen({ navigation, route }) {
         };
       });
     },
-    [childNameForStory, story?.pages]
+    [childNameForStory, selectedGender, story?.pages]
   );
 
   const [pageIndex, setPageIndex] = useState(0);
   const [initialIndex, setInitialIndex] = useState(0);
-  const [controlsVisible, setControlsVisible] = useState(true);
+  const [controlsVisible, setControlsVisible] = useState(false);
   const [completionCelebrated, setCompletionCelebrated] = useState(false);
   const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -392,7 +435,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [imageOpacity] = useState({});
   const [progressTrackWidth, setProgressTrackWidth] = useState(0);
   const progressAnim = useRef(new Animated.Value(progressRatio)).current;
-  const uiOpacity = useRef(new Animated.Value(1)).current;
+  const uiOpacity = useRef(new Animated.Value(0)).current;
   const pageSettleAnim = useRef(new Animated.Value(1)).current;
   const ambientDriftOpacity = useRef(new Animated.Value(1)).current;
   const listRef = useRef(null);
@@ -405,7 +448,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   const saveDebounceRef = useRef(null);
   const uiHideTimerRef = useRef(null);
   const completionTimerRef = useRef(null);
-  const isUiVisibleRef = useRef(true);
+  const isUiVisibleRef = useRef(false);
   const hasRestoredProgressRef = useRef(false);
   const pageIndexRef = useRef(0);
   const lastSettleFeedbackIndexRef = useRef(0);
@@ -414,7 +457,7 @@ export default function StoryReaderScreen({ navigation, route }) {
   const latestProgressRef = useRef({
     pageIndex: 0,
     artStyle,
-    controlsVisible: true,
+    controlsVisible: false,
     completionCelebrated: false,
   });
   const inferredVisualAnchor = React.useMemo(() => inferVisualAnchor(story), [story]);
@@ -457,48 +500,59 @@ export default function StoryReaderScreen({ navigation, route }) {
     return { storyId, childId };
   }, [story?.id, story?.title, selectedChild]);
   const progressStorageKey = React.useMemo(
-    () => `readerProgress:${readerIdentity.storyId}:${readerIdentity.childId}`,
+    () => `readerProgress:${readerIdentity.childId}:${readerIdentity.storyId}`,
     [readerIdentity]
   );
   const visualStorageKey = React.useMemo(
     () => `visualAnchor:${readerIdentity.storyId}:${readerIdentity.childId}:${artStyle}`,
     [readerIdentity, artStyle]
   );
-  const persistStoryProgress = React.useCallback(
-    async (currentPageIndex) => {
-      const storyId = readerIdentity.storyId;
-      if (!storyId || storyId === "unknown") return;
-
-      const normalizedPageIndex = Number.isFinite(currentPageIndex)
-        ? Math.max(0, Math.floor(currentPageIndex))
-        : 0;
-
-      try {
-        const raw = await AsyncStorage.getItem(STORY_PROGRESS_STORAGE_KEY);
-        let nextStoryProgress = {};
-
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            nextStoryProgress = { ...parsed };
-          }
-        }
-
-        nextStoryProgress[storyId] = normalizedPageIndex;
-        await AsyncStorage.setItem(
-          STORY_PROGRESS_STORAGE_KEY,
-          JSON.stringify(nextStoryProgress)
-        );
-      } catch (error) {
-        console.warn("Failed to save storyProgress map", error);
-      }
-    },
-    [readerIdentity.storyId]
-  );
-
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
   const isStoryComplete = totalPages > 0 && pageIndex >= totalPages - 1;
+
+  useEffect(() => {
+    const bundledIllustrationUris = [
+      ...new Set(
+        pages
+          .map((page) => resolveBundledIllustrationUri(page?.illustrationAssetSource))
+          .filter(Boolean)
+      ),
+    ];
+
+    if (bundledIllustrationUris.length === 0) return;
+
+    let cancelled = false;
+
+    const preloadBundledIllustrations = async () => {
+      try {
+        const results = await Promise.allSettled(
+          bundledIllustrationUris.map((uri) => Image.prefetch(uri))
+        );
+        if (cancelled) return;
+
+        const failedCount = results.filter(
+          (result) => result.status === "rejected" || result.value === false
+        ).length;
+        if (failedCount > 0) {
+          console.warn("Some bundled story illustrations failed to preload", {
+            failedCount,
+            totalCount: bundledIllustrationUris.length,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Failed to preload bundled story illustrations", error);
+        }
+      }
+    };
+
+    preloadBundledIllustrations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pages]);
 
   const requestExitReader = React.useCallback(
     (pendingAction = null) => {
@@ -708,36 +762,21 @@ export default function StoryReaderScreen({ navigation, route }) {
     uiHideTimerRef.current = setTimeout(() => {
       isUiVisibleRef.current = false;
       setControlsVisible(false);
-      fadeUiTo(0, 260);
+      fadeUiTo(0, 420);
       uiHideTimerRef.current = null;
-    }, 3500);
+    }, 3000);
   }, [fadeUiTo]);
 
+  const revealUiControls = React.useCallback(() => {
+    isUiVisibleRef.current = true;
+    setControlsVisible(true);
+    fadeUiTo(1, 240);
+    scheduleUiAutoHide();
+  }, [fadeUiTo, scheduleUiAutoHide]);
+
   const registerUiInteraction = React.useCallback(() => {
-    isUiVisibleRef.current = true;
-    setControlsVisible(true);
-    fadeUiTo(1, 280);
-    scheduleUiAutoHide();
-  }, [fadeUiTo, scheduleUiAutoHide]);
-
-  const toggleControls = React.useCallback(() => {
-    if (uiHideTimerRef.current) {
-      clearTimeout(uiHideTimerRef.current);
-      uiHideTimerRef.current = null;
-    }
-
-    if (isUiVisibleRef.current) {
-      isUiVisibleRef.current = false;
-      setControlsVisible(false);
-      fadeUiTo(0, 280);
-      return;
-    }
-
-    isUiVisibleRef.current = true;
-    setControlsVisible(true);
-    fadeUiTo(1, 280);
-    scheduleUiAutoHide();
-  }, [fadeUiTo, scheduleUiAutoHide]);
+    revealUiControls();
+  }, [revealUiControls]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -812,7 +851,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     const loadProgress = async () => {
       let restoredIndex = 0;
-      let restoredControlsVisible = true;
+      let restoredControlsVisible = false;
       let restoredCompletionCelebrated = false;
       const numericStartPageIndex = Number(startPageIndex);
       const hasRequestedStart = Number.isFinite(numericStartPageIndex);
@@ -826,7 +865,7 @@ export default function StoryReaderScreen({ navigation, route }) {
       try {
         if (shouldForceStart) {
           restoredIndex = requestedStartIndex != null ? requestedStartIndex : 0;
-          restoredControlsVisible = true;
+          restoredControlsVisible = false;
           restoredCompletionCelebrated = false;
 
           const normalizedTotalPages = totalPages > 0 ? totalPages : 0;
@@ -835,21 +874,18 @@ export default function StoryReaderScreen({ navigation, route }) {
             : 0;
           const lastOpenedAt = Date.now();
 
-          await Promise.all([
-            AsyncStorage.setItem(
-              progressStorageKey,
-              JSON.stringify({
-                pageIndex: restoredIndex,
-                artStyle,
-                controlsVisible: restoredControlsVisible,
-                completionCelebrated: restoredCompletionCelebrated,
-                totalPages: normalizedTotalPages,
-                progressPercent,
-                lastOpenedAt,
-              })
-            ),
-            persistStoryProgress(restoredIndex),
-          ]);
+          await AsyncStorage.setItem(
+            progressStorageKey,
+            JSON.stringify({
+              pageIndex: restoredIndex,
+              artStyle,
+              controlsVisible: restoredControlsVisible,
+              completionCelebrated: restoredCompletionCelebrated,
+              totalPages: normalizedTotalPages,
+              progressPercent,
+              lastOpenedAt,
+            })
+          );
         } else {
           const raw = await AsyncStorage.getItem(progressStorageKey);
           if (raw) {
@@ -861,9 +897,6 @@ export default function StoryReaderScreen({ navigation, route }) {
                 : 0;
             }
 
-            if (typeof parsed?.controlsVisible === "boolean") {
-              restoredControlsVisible = parsed.controlsVisible;
-            }
             if (typeof parsed?.completionCelebrated === "boolean") {
               restoredCompletionCelebrated = parsed.completionCelebrated;
             }
@@ -915,7 +948,6 @@ export default function StoryReaderScreen({ navigation, route }) {
     pageSettleAnim,
     startPageIndex,
     forceStart,
-    persistStoryProgress,
   ]);
 
   useEffect(() => {
@@ -1001,21 +1033,18 @@ export default function StoryReaderScreen({ navigation, route }) {
         : 0;
       const lastOpenedAt = Date.now();
       try {
-        await Promise.all([
-          AsyncStorage.setItem(
-            progressStorageKey,
-            JSON.stringify({
-              pageIndex: latestPageIndex,
-              artStyle: latestArtStyle,
-              controlsVisible: latestControlsVisible,
-              completionCelebrated: latestCompletionCelebrated,
-              totalPages: normalizedTotalPages,
-              progressPercent,
-              lastOpenedAt,
-            })
-          ),
-          persistStoryProgress(latestPageIndex),
-        ]);
+        await AsyncStorage.setItem(
+          progressStorageKey,
+          JSON.stringify({
+            pageIndex: latestPageIndex,
+            artStyle: latestArtStyle,
+            controlsVisible: latestControlsVisible,
+            completionCelebrated: latestCompletionCelebrated,
+            totalPages: normalizedTotalPages,
+            progressPercent,
+            lastOpenedAt,
+          })
+        );
       } catch (error) {
         console.warn("Failed to save reader progress", error);
       } finally {
@@ -1036,7 +1065,6 @@ export default function StoryReaderScreen({ navigation, route }) {
     completionCelebrated,
     isHydrated,
     progressStorageKey,
-    persistStoryProgress,
     totalPages,
   ]);
 
@@ -1062,26 +1090,23 @@ export default function StoryReaderScreen({ navigation, route }) {
         ? Math.min(1, (latestPageIndex + 1) / normalizedTotalPages)
         : 0;
       const lastOpenedAt = Date.now();
-      Promise.all([
-        AsyncStorage.setItem(
-          progressStorageKey,
-          JSON.stringify({
-            pageIndex: latestPageIndex,
-            artStyle: latestArtStyle,
-            controlsVisible: latestControlsVisible,
-            completionCelebrated: latestCompletionCelebrated,
-            totalPages: normalizedTotalPages,
-            progressPercent,
-            lastOpenedAt,
-          })
-        ),
-        persistStoryProgress(latestPageIndex),
-      ])
+      AsyncStorage.setItem(
+        progressStorageKey,
+        JSON.stringify({
+          pageIndex: latestPageIndex,
+          artStyle: latestArtStyle,
+          controlsVisible: latestControlsVisible,
+          completionCelebrated: latestCompletionCelebrated,
+          totalPages: normalizedTotalPages,
+          progressPercent,
+          lastOpenedAt,
+        })
+      )
         .catch((error) => {
           console.warn("Failed to save reader progress on unmount", error);
         });
     };
-  }, [clearCompletionTimer, persistStoryProgress, progressStorageKey, totalPages]);
+  }, [clearCompletionTimer, progressStorageKey, totalPages]);
 
   // Generate illustration for page
   // Uses generateImageFromAI utility (swap internals for real API)
@@ -1122,10 +1147,7 @@ export default function StoryReaderScreen({ navigation, route }) {
         storyId: readerIdentity.storyId,
         childId: readerIdentity.childId,
         pageIndex: index,
-        gender:
-          selectedChild && typeof selectedChild === "object"
-            ? selectedChild.gender ?? "neutral"
-            : "neutral",
+        gender: selectedGender,
       });
       const isPlaceholderToken =
         typeof imageUrl === "string" && imageUrl.startsWith(PLACEHOLDER_TOKEN_PREFIX);
@@ -1166,7 +1188,7 @@ export default function StoryReaderScreen({ navigation, route }) {
 
     const k = keyFor(pageIndex, artStyle);
     const page = pages[pageIndex];
-    const hasStaticIllustration = Boolean(page?.illustrationAssetName);
+    const hasStaticIllustration = Boolean(page?.illustrationAssetSource || page?.illustrationAssetName);
     const promptText = page?.prompt || page?.text;
     const anchorText = visualAnchor || inferredVisualAnchor;
     const anchoredPrompt = anchorText && promptText
@@ -1191,7 +1213,9 @@ export default function StoryReaderScreen({ navigation, route }) {
         // previously failed; skip automatic prefetch until user retries
       } else {
         const nextPage = pages[nextIndex];
-        const nextHasStaticIllustration = Boolean(nextPage?.illustrationAssetName);
+        const nextHasStaticIllustration = Boolean(
+          nextPage?.illustrationAssetSource || nextPage?.illustrationAssetName
+        );
         const nextPromptText = nextPage?.prompt || nextPage?.text;
         const anchoredNextPrompt = anchorText && nextPromptText
           ? `${anchorText}\nScene: ${nextPromptText}`
@@ -1261,15 +1285,25 @@ export default function StoryReaderScreen({ navigation, route }) {
         >
           {isLandscape ? (
             <View style={[styles.leftPageTextContainer, { backgroundColor: PAGE_COLOR }]}>
-              <View style={styles.leftPageContent}>
+              <ScrollView
+                style={styles.leftPageScroll}
+                contentContainerStyle={styles.leftPageScrollContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
                 <Text style={[styles.storyText, fontsLoaded && styles.storyTextNunito]}>{item?.text}</Text>
-              </View>
+              </ScrollView>
             </View>
           ) : (
             <View style={[styles.leftPageTextContainer, styles.leftPageTextContainerPortrait, { backgroundColor: PAGE_COLOR }]}>
-              <View style={styles.leftPageContent}>
+              <ScrollView
+                style={styles.leftPageScroll}
+                contentContainerStyle={styles.leftPageScrollContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
                 <Text style={[styles.storyText, fontsLoaded && styles.storyTextNunito]}>{item?.text}</Text>
-              </View>
+              </ScrollView>
             </View>
           )}
           <View style={[styles.rightPageSurface, { backgroundColor: PAGE_COLOR }]}>
@@ -1280,7 +1314,9 @@ export default function StoryReaderScreen({ navigation, route }) {
                 const staticIllustrationSource = item?.illustrationAssetSource;
                 const illustrationValue = staticIllustrationSource;
                 const imgSource = toImageSource(illustrationValue);
-                const hasStaticIllustration = Boolean(item?.illustrationAssetName);
+                const hasStaticIllustration = Boolean(
+                  item?.illustrationAssetSource || item?.illustrationAssetName
+                );
                 const img = pageImages[k];
                 const loading = loadingImages[k];
                 const failed = failedImages[k];
@@ -1364,7 +1400,6 @@ export default function StoryReaderScreen({ navigation, route }) {
             style={styles.tapZoneLeft}
             onPress={() => {
               suppressNextToggleRef.current = true;
-              registerUiInteraction();
               scrollToPage(pageIndex - 1);
             }}
             disabled={!canGoPrevious}
@@ -1373,7 +1408,6 @@ export default function StoryReaderScreen({ navigation, route }) {
             style={styles.tapZoneRight}
             onPress={() => {
               suppressNextToggleRef.current = true;
-              registerUiInteraction();
               scrollToPage(pageIndex + 1);
             }}
             disabled={!canGoNext}
@@ -1439,10 +1473,13 @@ export default function StoryReaderScreen({ navigation, route }) {
       <StatusBar hidden />
       <View pointerEvents="none" style={styles.readingVignette} />
 
-      <Animated.View style={[styles.headerRow, { opacity: uiOpacity }]}>
+      <Animated.View
+        pointerEvents={controlsVisible ? "auto" : "none"}
+        style={[styles.headerRow, { opacity: uiOpacity }]}
+      >
         <View style={styles.headerLeft}>
           <Text numberOfLines={1} style={[styles.title, { fontSize: 20, letterSpacing: 0.5 }]}>
-            {story?.title || "Story"}
+            {displayStoryTitle}
           </Text>
           {childDisplayName ? (
             <Text numberOfLines={1} style={styles.readingAsHeaderText}>
@@ -1479,7 +1516,10 @@ export default function StoryReaderScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
 
-      <Animated.View style={[styles.pageControls, { opacity: uiOpacity }]}>
+      <Animated.View
+        pointerEvents={controlsVisible ? "auto" : "none"}
+        style={[styles.pageControls, { opacity: uiOpacity }]}
+      >
         <TouchableOpacity
           style={[styles.pageControlButton, !canGoPrevious && styles.pageControlButtonDisabled]}
           disabled={!canGoPrevious}
@@ -1583,16 +1623,12 @@ export default function StoryReaderScreen({ navigation, route }) {
               return;
             }
             if (touchMovedRef.current) return;
-            toggleControls();
+            revealUiControls();
           }}
           onScrollBeginDrag={() => {
             programmaticTargetIndexRef.current = null;
-            registerUiInteraction();
           }}
-          onScrollEndDrag={registerUiInteraction}
-          onMomentumScrollBegin={registerUiInteraction}
           onMomentumScrollEnd={(e) => {
-            registerUiInteraction();
             const i = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
             if (programmaticTargetIndexRef.current != null && i === programmaticTargetIndexRef.current) {
               programmaticTargetIndexRef.current = null;
@@ -1805,50 +1841,6 @@ const styles = StyleSheet.create({
   },
   progress: { fontSize: 11, opacity: 0.95, color: "#5F5A6D" },
 
-  styleSelector: {
-    position: "absolute",
-    top: 50,
-    left: 12,
-    zIndex: 5,
-    flexDirection: "row",
-    gap: 8,
-  },
-  styleButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "rgba(42,31,71,0.8)",
-    borderWidth: 1,
-    borderColor: "rgba(160,120,255,0.2)",
-  },
-  styleButtonActive: {
-    backgroundColor: "rgba(167,139,250,0.2)",
-    borderColor: "rgba(167,139,250,0.6)",
-  },
-  styleButtonText: {
-    fontSize: 11,
-    opacity: 0.6,
-    color: "#F5F3FF",
-  },
-  styleButtonTextActive: {
-    opacity: 1,
-    fontWeight: "600",
-    color: "#A78BFA",
-  },
-
-  styleUpdatingBadge: {
-    marginLeft: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.06)",
-    justifyContent: "center",
-  },
-  styleUpdatingText: {
-    fontSize: 11,
-    opacity: 0.7,
-  },
-
   closeBtn: {
     width: 36,
     height: 36,
@@ -1936,19 +1928,16 @@ const styles = StyleSheet.create({
   leftPageTextContainerPortrait: {
     width: "100%",
   },
-  leftPageContent: {
+  leftPageScroll: {
     flex: 1,
+  },
+  leftPageScrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     paddingTop: 22,
     paddingBottom: 18,
     paddingLeft: 24,
     paddingRight: 20,
-  },
-  leftPageTextColumn: {
-    flex: 1,
-    justifyContent: "center",
-    maxWidth: "100%",
-    alignSelf: "flex-start",
   },
   rightPageSurface: {
     flex: 1,

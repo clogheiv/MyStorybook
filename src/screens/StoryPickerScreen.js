@@ -15,11 +15,11 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { loadStoryCatalog, catalogStoryById } from "../data/storyCatalog";
+import { loadStoryCatalog, catalogStoryById, personalizeStoryForChild } from "../data/storyCatalog";
 
 const STORY_LIBRARY_STORAGE_KEY = "storyLibrary:v1";
-const STORY_PROGRESS_STORAGE_KEY = "storyProgress:v1";
 const CHILD_NAME_PLACEHOLDER = "{{childName}}";
+const CHILD_NAME_PLACEHOLDER_PATTERN = /{{\s*(childName|child['’]s name)\s*}}/gi;
 const DEFAULT_STORIES = loadStoryCatalog();
 const CATALOG_BY_ID = catalogStoryById();
 const COMING_SOON_TITLES = [
@@ -39,6 +39,7 @@ const normalizeStories = (inputStories) => {
       const rawId = story.id != null ? String(story.id).trim() : "";
       const rawTitle = typeof story.title === "string" ? story.title.trim() : "";
       if (!rawId || !rawTitle) return null;
+      if (!CATALOG_BY_ID.has(rawId)) return null;
 
       const numericCreatedAt = Number(story.createdAt);
       const createdAt = Number.isFinite(numericCreatedAt)
@@ -47,8 +48,8 @@ const normalizeStories = (inputStories) => {
       const catalogStory = CATALOG_BY_ID.get(rawId);
 
       return {
-        ...(catalogStory || {}),
         ...story,
+        ...(catalogStory || {}),
         id: rawId,
         title: rawTitle,
         createdAt,
@@ -67,6 +68,7 @@ const normalizeDeletedStories = (inputStories) => {
       const rawId = story.id != null ? String(story.id).trim() : "";
       const rawTitle = typeof story.title === "string" ? story.title.trim() : "";
       if (!rawId || !rawTitle) return null;
+      if (!CATALOG_BY_ID.has(rawId)) return null;
 
       const numericCreatedAt = Number(story.createdAt);
       const createdAt = Number.isFinite(numericCreatedAt)
@@ -88,15 +90,12 @@ const normalizeDeletedStories = (inputStories) => {
     .filter(Boolean);
 };
 
-const mergeCatalogStories = (activeStories, deletedStories) => {
+const mergeCatalogStories = (activeStories) => {
   const safeActiveStories = Array.isArray(activeStories) ? activeStories : [];
-  const safeDeletedStories = Array.isArray(deletedStories) ? deletedStories : [];
   const activeIds = new Set(safeActiveStories.map((story) => String(story.id)));
-  const deletedIds = new Set(safeDeletedStories.map((story) => String(story.id)));
 
   const missingCatalogStories = DEFAULT_STORIES.filter(
-    (catalogStory) =>
-      !activeIds.has(String(catalogStory.id)) && !deletedIds.has(String(catalogStory.id))
+    (catalogStory) => !activeIds.has(String(catalogStory.id))
   );
 
   return [...safeActiveStories, ...missingCatalogStories];
@@ -106,7 +105,7 @@ const normalizeLibraryState = (storedValue) => {
   if (Array.isArray(storedValue)) {
     const activeStories = normalizeStories(storedValue);
     return {
-      activeStories: mergeCatalogStories(activeStories, []),
+      activeStories: mergeCatalogStories(activeStories),
       deletedStories: [],
     };
   }
@@ -115,7 +114,7 @@ const normalizeLibraryState = (storedValue) => {
     const activeStories = normalizeStories(storedValue.activeStories);
     const deletedStories = normalizeDeletedStories(storedValue.deletedStories);
     return {
-      activeStories: mergeCatalogStories(activeStories, deletedStories),
+      activeStories: mergeCatalogStories(activeStories),
       deletedStories,
     };
   }
@@ -129,7 +128,7 @@ const normalizeLibraryState = (storedValue) => {
 const personalizeComingSoonTitle = (title, childName) => {
   if (typeof title !== "string") return "";
   if (!childName || typeof childName !== "string") return title;
-  return title.split(CHILD_NAME_PLACEHOLDER).join(childName);
+  return title.replace(CHILD_NAME_PLACEHOLDER_PATTERN, childName);
 };
 
 export default function StoryPickerScreen({ navigation, route }) {
@@ -247,16 +246,13 @@ export default function StoryPickerScreen({ navigation, route }) {
 
   const loadProgress = React.useCallback(async () => {
     try {
-      const [sharedProgressRaw, entries] = await Promise.all([
-        AsyncStorage.getItem(STORY_PROGRESS_STORAGE_KEY),
-        Promise.all(
-          activeStories.map(async (story) => {
-            const key = `readerProgress:${story.id}:${childId}`;
-            const raw = await AsyncStorage.getItem(key);
-            return { storyId: story.id, raw };
-          })
-        ),
-      ]);
+      const entries = await Promise.all(
+        activeStories.map(async (story) => {
+          const key = `readerProgress:${childId}:${story.id}`;
+          const raw = await AsyncStorage.getItem(key);
+          return { storyId: story.id, raw };
+        })
+      );
 
       const nextProgress = {};
       const nextProgressTotalPages = {};
@@ -283,22 +279,6 @@ export default function StoryPickerScreen({ navigation, route }) {
           // Ignore malformed progress entries.
         }
       });
-
-      if (sharedProgressRaw) {
-        try {
-          const parsedShared = JSON.parse(sharedProgressRaw);
-          if (parsedShared && typeof parsedShared === "object" && !Array.isArray(parsedShared)) {
-            activeStories.forEach((story) => {
-              const savedPageIndex = Number(parsedShared[story.id]);
-              if (Number.isFinite(savedPageIndex) && savedPageIndex >= 0) {
-                nextProgress[story.id] = Math.floor(savedPageIndex);
-              }
-            });
-          }
-        } catch {
-          // Ignore malformed shared story progress.
-        }
-      }
 
       setProgressByStory(nextProgress);
       setProgressTotalPagesByStory(nextProgressTotalPages);
@@ -488,17 +468,7 @@ export default function StoryPickerScreen({ navigation, route }) {
               delete next[story.id];
               return next;
             });
-            AsyncStorage.getItem(STORY_PROGRESS_STORAGE_KEY)
-              .then((raw) => {
-                if (!raw) return;
-                const parsed = JSON.parse(raw);
-                if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-                const next = { ...parsed };
-                delete next[story.id];
-                return AsyncStorage.setItem(STORY_PROGRESS_STORAGE_KEY, JSON.stringify(next));
-              })
-              .catch(() => {});
-            AsyncStorage.removeItem(`readerProgress:${story.id}:${childId}`).catch(() => {});
+            AsyncStorage.removeItem(`readerProgress:${childId}:${story.id}`).catch(() => {});
           },
         },
       ]
@@ -598,6 +568,12 @@ export default function StoryPickerScreen({ navigation, route }) {
   const showContinueHint = !isSearching && continueStories.length === 0 && filteredStories.length > 0;
   const showRecentlyDeletedEntry = !isSearching && deletedStories.length > 0;
 
+  React.useEffect(() => {
+    console.log("[StoryPicker] catalog length", DEFAULT_STORIES.length);
+    console.log("[StoryPicker] filtered story count", filteredStories.length);
+    console.log("[StoryPicker] selected child", selectedChild);
+  }, [filteredStories.length, selectedChild]);
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -660,12 +636,6 @@ export default function StoryPickerScreen({ navigation, route }) {
                   </Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                style={styles.emptyActionButton}
-                onPress={() => navigation.navigate("StoryPicker", { selectedChild })}
-              >
-                <Text style={styles.emptyActionButtonText}>Choose a Story</Text>
-              </TouchableOpacity>
             </View>
           ) : isSearchEmpty ? (
             <View style={styles.emptyStateWrap}>
@@ -740,6 +710,7 @@ export default function StoryPickerScreen({ navigation, route }) {
                     : Number.isFinite(progressPercent) && progressPercent >= 1
                     ? "Finished"
                     : "In progress";
+                  const displayStory = personalizeStoryForChild(item.story, selectedChild);
 
                   return (
                     <TouchableOpacity
@@ -748,7 +719,7 @@ export default function StoryPickerScreen({ navigation, route }) {
                       delayLongPress={280}
                       style={styles.storyCard}
                     >
-                      <Text style={styles.storyTitle}>{"\u{1F4D6} "}{item.story.title}</Text>
+                      <Text style={styles.storyTitle}>{"\u{1F4D6} "}{displayStory.title}</Text>
                       {progressStatus ? (
                         <Text style={styles.progressStatusText}>{progressStatus}</Text>
                       ) : null}

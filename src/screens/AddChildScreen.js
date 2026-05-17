@@ -9,9 +9,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  CHARACTER_STYLE_OPTIONS,
+  DEFAULT_CHARACTER_STYLE,
+} from "../data/characterStyles";
 
 export default function AddChildScreen({ navigation, route, onAddProfile }) {
   const [name, setName] = React.useState("");
+  const [characterStyle, setCharacterStyle] = React.useState(DEFAULT_CHARACTER_STYLE);
   const [isSaving, setIsSaving] = React.useState(false);
   const normalizedName = name.trim();
   const canSave = normalizedName.length > 0 && !isSaving;
@@ -22,7 +27,7 @@ export default function AddChildScreen({ navigation, route, onAddProfile }) {
 
     try {
       setIsSaving(true);
-      const created = await onAddProfile(normalizedName);
+      const created = await onAddProfile(normalizedName, characterStyle);
       if (!created) return;
 
       if (returnTo === "Profiles") {
@@ -43,7 +48,7 @@ export default function AddChildScreen({ navigation, route, onAddProfile }) {
     } finally {
       setIsSaving(false);
     }
-  }, [canSave, navigation, normalizedName, onAddProfile, returnTo]);
+  }, [canSave, characterStyle, navigation, normalizedName, onAddProfile, returnTo]);
 
   return (
     <KeyboardAvoidingView
@@ -71,6 +76,33 @@ export default function AddChildScreen({ navigation, route, onAddProfile }) {
             editable={!isSaving}
             onSubmitEditing={saveProfile}
           />
+          <Text style={styles.fieldLabel}>Character Style</Text>
+          <View style={styles.characterStyleSelector}>
+            {CHARACTER_STYLE_OPTIONS.map((option) => {
+              const isSelected = option.key === characterStyle;
+              return (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[
+                    styles.characterStyleButton,
+                    isSelected && styles.characterStyleButtonSelected,
+                  ]}
+                  onPress={() => setCharacterStyle(option.key)}
+                  disabled={isSaving}
+                >
+                  <Text style={styles.characterStyleIcon}>{option.icon}</Text>
+                  <Text
+                    style={[
+                      styles.characterStyleButtonText,
+                      isSelected && styles.characterStyleButtonTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <TouchableOpacity
             style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
             onPress={saveProfile}
@@ -130,6 +162,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 15,
     marginBottom: 14,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#CFC5E5",
+    opacity: 0.86,
+    letterSpacing: 0.2,
+    marginBottom: 8,
+  },
+  characterStyleSelector: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 18,
+  },
+  characterStyleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,230,180,0.18)",
+    backgroundColor: "rgba(47,35,79,0.58)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  characterStyleButtonSelected: {
+    borderColor: "rgba(255,230,180,0.36)",
+    backgroundColor: "rgba(167,139,250,0.24)",
+  },
+  characterStyleIcon: {
+    fontSize: 16,
+  },
+  characterStyleButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#CFC5E5",
+    letterSpacing: 0.15,
+  },
+  characterStyleButtonTextSelected: {
+    color: "#F4F1FF",
   },
   saveButton: {
     alignItems: "center",
