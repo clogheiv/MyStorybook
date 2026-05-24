@@ -66,6 +66,27 @@ const STORY_CATALOG = [
       "That night, tucked safely beneath cozy blankets, {{childName}} smiled sleepily.\n\nSchool was not so scary after all.\n\nIn fact…\n\n{{childName}} could not wait to go back tomorrow.",
     ]),
   },
+  {
+    id: "a-day-at-the-farm",
+    title: "A Day at the Farm",
+    description: "A sunny farm visit with chickens, goats, cows, a tractor ride, muddy piglets, and a peaceful hayride.",
+    artStyle: "cozy",
+    estimatedReadTime: 5,
+    pages: withStoryPageIllustrations("a-day-at-the-farm", [
+      "Early in the morning, {{childName}} bounced excitedly down the farm driveway.\n\nA bright red barn stood beside wide green fields while the smell of fresh hay drifted through the air.\n\nToday was farm day.",
+      "“Cock-a-doodle-doo!”\n\nA rooster flapped its feathers and crowed proudly from the fence post while chickens scratched busily in the dirt below.\n\n{{childName}} laughed at all the noisy morning sounds.",
+      "Soon it was time to feed the chickens.\n\nTiny chicks hurried around {{childName}}’s boots, peeping softly while searching for scattered grain.\n\nTheir fluffy feathers looked as soft as little clouds.",
+      "Inside the chicken coop, warm eggs rested carefully in the straw.\n\n{{childName}} gently placed each egg into a basket while trying very hard not to drop a single one.\n\nThe farmer smiled proudly.",
+      "Near the barn fence, playful baby goats bounced and hopped through the grass.\n\nOne little goat stretched up on its tiny back legs and tried nibbling {{childName}}’s sleeve.\n\nIt made everyone laugh.",
+      "Farther down the path stood enormous cows slowly chewing hay beneath the shade trees.\n\nOne curious calf waddled over to sniff {{childName}}’s hand with its big wet nose.\n\nIts ears twitched happily.",
+      "Next came the tractor ride.\n\nThe tractor rumbled loudly across the fields while tall grass swayed in the warm breeze all around them.\n\n{{childName}} held on tightly and grinned from ear to ear.",
+      "Near the muddy pen, pink piglets splashed and rolled through puddles with happy squeals.\n\nMud flew everywhere.\n\nOne piglet slipped sideways and landed with a funny SPLAT.",
+      "A sleepy orange barn cat quietly followed {{childName}} through the farmyard.\n\nSometimes it rubbed against {{childName}}’s legs.\n\nSometimes it disappeared beneath the old wooden porch.\n\nBut somehow it always came back.",
+      "Later, everyone climbed aboard a hayride wagon filled with soft golden straw.\n\nThe wagon rolled slowly past waving fields, old fences, and fluttering scarecrows beneath the bright blue sky.\n\nEverything felt peaceful and wide open.",
+      "By afternoon, the farm stand was filled with fresh lemonade, apples, homemade jam, and warm pies cooling beside the windows.\n\n{{childName}} sat beneath a shady tree sipping cold lemonade while watching the animals wander through the fields.",
+      "As the sun began to lower, {{childName}} waved goodbye to the farm.\n\nThe animals, the tractor, the barn, and the rolling green fields slowly disappeared down the road behind them.\n\n“I can’t wait to come back,” {{childName}} said with a happy smile.",
+    ]),
+  },
 ];
 
 const fallbackCreatedAtForIndex = (index) => 1704067200000 + index * 86400000;
