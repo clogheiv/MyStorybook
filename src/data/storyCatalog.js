@@ -1,7 +1,4 @@
-import {
-  withSequentialIllustrationNames,
-  withStoryPageIllustrations,
-} from "./localIllustrations";
+import { withStoryPageIllustrations } from "./localIllustrations";
 const CHILD_NAME_PLACEHOLDER = "{{childName}}";
 const CHILD_NAME_PLACEHOLDER_PATTERN = /{{\s*(childName|child['’]s name)\s*}}/gi;
 
@@ -96,7 +93,7 @@ const STORY_CATALOG = [
     description: "A cozy backyard camping story with a tent, fireflies, flashlight shadows, stars, and a sleepy goodnight.",
     artStyle: "cozy",
     estimatedReadTime: 5,
-    pages: withSequentialIllustrationNames("campout_placeholder", [
+    pages: withStoryPageIllustrations("the-campout-in-the-backyard", [
       "The backyard looked different as the evening sky turned soft and golden.\n\n{{childName}} helped carry blankets, pillows, and a little lantern outside.\n\nTonight was a backyard campout.",
       "A small tent stood beneath the trees with its door flap open wide.\n\n{{childName}} crawled inside and made a cozy nest with blankets and a favorite stuffed animal.\n\nThe tent felt like a tiny house under the sky.",
       "As the sun slipped lower, fireflies began blinking over the grass.\n\n{{childName}} watched their tiny lights float and disappear like little stars practicing for nighttime.\n\nOne firefly glowed right beside the tent.",
@@ -108,7 +105,7 @@ const STORY_CATALOG = [
       "A sleepy dog padded across the yard and curled up beside the tent.\n\n{{childName}} reached out to give one gentle pat.\n\nThe dog sighed happily and closed its eyes.",
       "The stars grew brighter as the backyard became still.\n\n{{childName}} pointed up and found one star that seemed to twinkle extra bright.\n\nMaybe it was saying goodnight.",
       "Inside the tent, the lantern glowed softly beside the blankets.\n\n{{childName}} snuggled down and listened to the crickets, the leaves, and the quiet night.\n\nThe backyard felt peaceful and safe.",
-      "“I love camping at home,” {{childName}} whispered with a sleepy smile. 🌙✨",
+      "“This was the best campout,” {{childName}} said with a happy grin.\n\nThere had been fireflies, crickets, stars, snacks, stories, and a tent right in the backyard.\n\n{{childName}} already could not wait until the next adventure under the night sky. 🌙✨",
     ]),
   },
 ];

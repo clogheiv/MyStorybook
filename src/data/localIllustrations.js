@@ -208,10 +208,62 @@ const A_DAY_AT_THE_FARM_ASSETS = Object.freeze({
   },
 });
 
+const THE_CAMPOUT_IN_THE_BACKYARD_ASSETS = Object.freeze({
+  1: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-01-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-01-girl.png"),
+  },
+  2: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-02-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-02-girl.png"),
+  },
+  3: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-03-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-03-girl.png"),
+  },
+  4: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-04-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-04-girl.png"),
+  },
+  5: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-05-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-05-girl.png"),
+  },
+  6: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-06-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-06-girl.png"),
+  },
+  7: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-07-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-07-girl.png"),
+  },
+  8: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-08-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-08-girl.png"),
+  },
+  9: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-09-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-09-girl.png"),
+  },
+  10: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-10-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-10-girl.png"),
+  },
+  11: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-11-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-11-girl.png"),
+  },
+  12: {
+    boy: require("../../assets/stories/the-campout-in-the-backyard/page-12-boy.png"),
+    girl: require("../../assets/stories/the-campout-in-the-backyard/page-12-girl.png"),
+  },
+});
+
 const STORY_ILLUSTRATION_ASSETS = Object.freeze({
   "a-day-at-the-farm": A_DAY_AT_THE_FARM_ASSETS,
   "a-day-at-the-zoo": A_DAY_AT_THE_ZOO_ASSETS,
   "first-day-of-school": FIRST_DAY_OF_SCHOOL_ASSETS,
+  "the-campout-in-the-backyard": THE_CAMPOUT_IN_THE_BACKYARD_ASSETS,
   "the-rainy-day-adventure": THE_RAINY_DAY_ADVENTURE_ASSETS,
 });
 
