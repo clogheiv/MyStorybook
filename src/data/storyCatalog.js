@@ -1,4 +1,7 @@
-import { withStoryPageIllustrations } from "./localIllustrations";
+import {
+  withSequentialIllustrationNames,
+  withStoryPageIllustrations,
+} from "./localIllustrations";
 const CHILD_NAME_PLACEHOLDER = "{{childName}}";
 const CHILD_NAME_PLACEHOLDER_PATTERN = /{{\s*(childName|child['’]s name)\s*}}/gi;
 
@@ -85,6 +88,27 @@ const STORY_CATALOG = [
       "Later, everyone climbed aboard a hayride wagon filled with soft golden straw.\n\nThe wagon rolled slowly past waving fields, old fences, and fluttering scarecrows beneath the bright blue sky.\n\nEverything felt peaceful and wide open.",
       "By afternoon, the farm stand was filled with fresh lemonade, apples, homemade jam, and warm pies cooling beside the windows.\n\n{{childName}} sat beneath a shady tree sipping cold lemonade while watching the animals wander through the fields.",
       "As the sun began to lower, {{childName}} waved goodbye to the farm.\n\nThe animals, the tractor, the barn, and the rolling green fields slowly disappeared down the road behind them.\n\n“I can’t wait to come back,” {{childName}} said with a happy smile.",
+    ]),
+  },
+  {
+    id: "the-campout-in-the-backyard",
+    title: "The Campout in the Backyard",
+    description: "A cozy backyard camping story with a tent, fireflies, flashlight shadows, stars, and a sleepy goodnight.",
+    artStyle: "cozy",
+    estimatedReadTime: 5,
+    pages: withSequentialIllustrationNames("campout_placeholder", [
+      "The backyard looked different as the evening sky turned soft and golden.\n\n{{childName}} helped carry blankets, pillows, and a little lantern outside.\n\nTonight was a backyard campout.",
+      "A small tent stood beneath the trees with its door flap open wide.\n\n{{childName}} crawled inside and made a cozy nest with blankets and a favorite stuffed animal.\n\nThe tent felt like a tiny house under the sky.",
+      "As the sun slipped lower, fireflies began blinking over the grass.\n\n{{childName}} watched their tiny lights float and disappear like little stars practicing for nighttime.\n\nOne firefly glowed right beside the tent.",
+      "Soon it was time for campout snacks.\n\n{{childName}} sat on a picnic blanket with fruit, crackers, and a cup of cocoa.\n\nEverything tasted better outside in the cool evening air.",
+      "A flashlight made funny shadows dance across the tent wall.\n\n{{childName}} moved their hands and giggled as the shadows stretched tall, tiny, wiggly, and wide.\n\nEven the stuffed animal seemed to be watching.",
+      "The crickets started chirping from the bushes.\n\n{{childName}} listened carefully and tried to count each chirp.\n\nThe whole backyard sounded like a tiny nighttime orchestra.",
+      "A gentle breeze rustled the leaves above the tent.\n\n{{childName}} peeked out and saw the moon rising over the roof.\n\nIt looked calm and bright, like it was keeping watch.",
+      "Everyone gathered close for a quiet story under the stars.\n\n{{childName}} held the blanket snug beneath their chin.\n\nThe story sounded softer outside, with the night all around.",
+      "A sleepy dog padded across the yard and curled up beside the tent.\n\n{{childName}} reached out to give one gentle pat.\n\nThe dog sighed happily and closed its eyes.",
+      "The stars grew brighter as the backyard became still.\n\n{{childName}} pointed up and found one star that seemed to twinkle extra bright.\n\nMaybe it was saying goodnight.",
+      "Inside the tent, the lantern glowed softly beside the blankets.\n\n{{childName}} snuggled down and listened to the crickets, the leaves, and the quiet night.\n\nThe backyard felt peaceful and safe.",
+      "“I love camping at home,” {{childName}} whispered with a sleepy smile. 🌙✨",
     ]),
   },
 ];
