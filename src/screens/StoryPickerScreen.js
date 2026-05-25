@@ -2,6 +2,7 @@ import React from "react";
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   SectionList,
@@ -16,6 +17,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loadStoryCatalog, catalogStoryById, personalizeStoryForChild } from "../data/storyCatalog";
+import { resolveStoryPageIllustrationAsset } from "../data/localIllustrations";
 
 const STORY_LIBRARY_STORAGE_KEY = "storyLibrary:v1";
 const CHILD_NAME_PLACEHOLDER = "{{childName}}";
@@ -171,11 +173,11 @@ export default function StoryPickerScreen({ navigation, route }) {
     navigation.setOptions({
       title: "",
       headerStyle: {
-        backgroundColor: "#241A3A",
+        backgroundColor: "#F7EFE2",
         borderBottomWidth: 0,
         elevation: 0,
       },
-      headerTintColor: "#F4F1FF",
+      headerTintColor: "#25283A",
       headerBackTitle: " ",
     });
   }, [navigation]);
@@ -565,8 +567,8 @@ export default function StoryPickerScreen({ navigation, route }) {
 
   const isLibraryEmpty = storiesHydrated && sortedStories.length === 0;
   const isSearchEmpty = isSearching && filteredStories.length === 0;
-  const showContinueHint = !isSearching && continueStories.length === 0 && filteredStories.length > 0;
   const showRecentlyDeletedEntry = !isSearching && deletedStories.length > 0;
+  const selectedCharacterStyle = selectedChild?.gender === "girl" ? "girl" : "boy";
 
   React.useEffect(() => {
     console.log("[StoryPicker] catalog length", DEFAULT_STORIES.length);
@@ -582,16 +584,19 @@ export default function StoryPickerScreen({ navigation, route }) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.mainContent}>
-          <Text style={styles.header}>
-            Choose a story for {childDisplayName || "them"}
-          </Text>
-          <Text style={styles.subtitle}>Pick tonight's story</Text>
+          <View style={styles.headerCard}>
+            <Text style={styles.eyebrow}>Story Library</Text>
+            <Text style={styles.header}>Complete Story List</Text>
+            <Text style={styles.subtitle}>
+              Find the perfect story for {childDisplayName || "tonight"}
+            </Text>
+          </View>
 
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search stories"
-            placeholderTextColor="rgba(244,241,255,0.50)"
+            placeholderTextColor="#8B8292"
             style={styles.searchInput}
             autoCapitalize="none"
             autoCorrect={false}
@@ -649,9 +654,6 @@ export default function StoryPickerScreen({ navigation, route }) {
             </View>
           ) : (
             <>
-              {showContinueHint && (
-                <Text style={styles.continueHintText}>Start a story to see it here.</Text>
-              )}
               <SectionList
                 sections={sections}
                 style={styles.list}
@@ -711,6 +713,11 @@ export default function StoryPickerScreen({ navigation, route }) {
                     ? "Finished"
                     : "In progress";
                   const displayStory = personalizeStoryForChild(item.story, selectedChild);
+                  const imageSource = resolveStoryPageIllustrationAsset({
+                    storyId: item.story.id,
+                    pageNumber: 1,
+                    gender: selectedCharacterStyle,
+                  });
 
                   return (
                     <TouchableOpacity
@@ -719,10 +726,19 @@ export default function StoryPickerScreen({ navigation, route }) {
                       delayLongPress={280}
                       style={styles.storyCard}
                     >
-                      <Text style={styles.storyTitle}>{"\u{1F4D6} "}{displayStory.title}</Text>
-                      {progressStatus ? (
-                        <Text style={styles.progressStatusText}>{progressStatus}</Text>
-                      ) : null}
+                      <View style={styles.storyCover}>
+                        {imageSource ? (
+                          <Image source={imageSource} style={styles.storyImage} />
+                        ) : (
+                          <Text style={styles.storyCoverFallback}>Story</Text>
+                        )}
+                      </View>
+                      <View style={styles.storyCopy}>
+                        <Text style={styles.storyTitle}>{displayStory.title}</Text>
+                        {progressStatus ? (
+                          <Text style={styles.progressStatusText}>{progressStatus}</Text>
+                        ) : null}
+                      </View>
                     </TouchableOpacity>
                   );
                 }}
@@ -881,59 +897,85 @@ export default function StoryPickerScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#241A3A",
+    backgroundColor: "#F7EFE2",
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 24,
+    paddingBottom: 48,
   },
   mainContent: {
     flexGrow: 1,
-    padding: 20,
-    paddingTop: 24,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 44,
+  },
+  headerCard: {
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "#E4D2B8",
+    backgroundColor: "#FFF9EE",
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    marginBottom: 16,
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  eyebrow: {
+    color: "#8B6F3E",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    marginBottom: 5,
   },
   header: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#F4F1FF",
-    marginBottom: 8,
-    opacity: 0.9,
-    letterSpacing: 0.3,
+    fontSize: 30,
+    fontWeight: "900",
+    color: "#25283A",
+    marginBottom: 6,
+    letterSpacing: 0,
+    lineHeight: 34,
   },
   subtitle: {
-    fontSize: 14,
-    fontWeight: "400",
-    color: "#F4F1FF",
-    marginBottom: 24,
-    opacity: 0.75,
-    letterSpacing: 0.2,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#51566C",
+    lineHeight: 22,
+    letterSpacing: 0,
   },
   searchInput: {
-    height: 42,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.15)",
-    backgroundColor: "rgba(47,35,79,0.6)",
-    color: "#F4F1FF",
-    paddingHorizontal: 12,
-    fontSize: 14,
-    marginBottom: 10,
+    borderColor: "#E4D2B8",
+    backgroundColor: "#FFFCF4",
+    color: "#25283A",
+    paddingHorizontal: 15,
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 12,
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sortRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 16,
   },
   sortLabel: {
     fontSize: 12,
-    color: "#CFC5E5",
-    opacity: 0.74,
-    letterSpacing: 0.2,
-    fontWeight: "600",
+    color: "#8B6F3E",
+    letterSpacing: 0,
+    fontWeight: "900",
   },
   sortToggleGroup: {
     flexDirection: "row",
@@ -941,33 +983,31 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sortToggleButton: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.16)",
-    backgroundColor: "rgba(47,35,79,0.45)",
+    borderColor: "#DED0BD",
+    backgroundColor: "#FFFCF4",
   },
   sortToggleButtonActive: {
-    borderColor: "rgba(255,230,180,0.3)",
-    backgroundColor: "rgba(47,35,79,0.72)",
+    borderColor: "#C9B2E5",
+    backgroundColor: "#E8DFF3",
   },
   sortToggleText: {
-    fontSize: 11,
-    color: "#CFC5E5",
-    opacity: 0.82,
-    letterSpacing: 0.15,
-    fontWeight: "600",
+    fontSize: 12,
+    color: "#51566C",
+    letterSpacing: 0,
+    fontWeight: "800",
   },
   sortToggleTextActive: {
-    color: "#F4F1FF",
-    opacity: 1,
+    color: "#493B63",
   },
   list: {
     width: "100%",
   },
   listContent: {
-    paddingBottom: 32,
+    paddingBottom: 36,
   },
   listFooterSpacer: {
     height: 8,
@@ -980,24 +1020,15 @@ const styles = StyleSheet.create({
   },
   recentlyDeletedText: {
     fontSize: 12,
-    color: "#CFC5E5",
-    opacity: 0.74,
-    letterSpacing: 0.15,
-    fontWeight: "500",
-  },
-  continueHintText: {
-    fontSize: 12,
-    color: "#CFC5E5",
-    opacity: 0.68,
-    marginBottom: 8,
-    letterSpacing: 0.15,
+    color: "#8B6F3E",
+    letterSpacing: 0,
+    fontWeight: "800",
   },
   sectionHeader: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#CFC5E5",
-    opacity: 0.72,
-    letterSpacing: 0.2,
+    fontWeight: "900",
+    color: "#8B6F3E",
+    letterSpacing: 0,
   },
   sectionHeaderFirst: {
     marginBottom: 10,
@@ -1007,38 +1038,67 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   storyCard: {
-    backgroundColor: "#2F234F",
-    borderRadius: 20,
-    paddingVertical: 22,
-    paddingHorizontal: 18,
-    marginBottom: 20,
-    borderColor: "rgba(255,230,180,0.12)",
+    backgroundColor: "#FFFCF4",
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    borderColor: "#E4D2B8",
     borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  storyCover: {
+    width: 68,
+    height: 82,
+    borderRadius: 16,
+    backgroundColor: "#E8DFF3",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E4D2B8",
+    marginRight: 13,
+  },
+  storyImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  storyCoverFallback: {
+    flex: 1,
+    color: "#493B63",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center",
+    textAlignVertical: "center",
+  },
+  storyCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   storyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#F4F1FF",
-    letterSpacing: 0.2,
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#25283A",
+    letterSpacing: 0,
+    lineHeight: 22,
   },
   comingSoonCard: {
     opacity: 0.72,
   },
   comingSoonTitle: {
-    color: "#D9D0EC",
+    color: "#51566C",
   },
   progressStatusText: {
     marginTop: 7,
     fontSize: 12,
-    fontWeight: "500",
-    color: "#CFC5E5",
-    opacity: 0.75,
-    letterSpacing: 0.15,
+    fontWeight: "800",
+    color: "#8B6F3E",
+    letterSpacing: 0,
   },
   emptyStateWrap: {
     flex: 1,
@@ -1049,18 +1109,16 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#F4F1FF",
-    opacity: 0.94,
-    letterSpacing: 0.2,
+    fontWeight: "900",
+    color: "#25283A",
+    letterSpacing: 0,
     marginBottom: 10,
     textAlign: "center",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#CFC5E5",
-    opacity: 0.78,
-    letterSpacing: 0.15,
+    color: "#51566C",
+    letterSpacing: 0,
     textAlign: "center",
     marginBottom: 14,
     lineHeight: 20,
@@ -1094,10 +1152,9 @@ const styles = StyleSheet.create({
   },
   clearSearchText: {
     fontSize: 12,
-    color: "#CFC5E5",
-    opacity: 0.88,
-    letterSpacing: 0.2,
-    fontWeight: "600",
+    color: "#493B63",
+    letterSpacing: 0,
+    fontWeight: "900",
   },
   undoSnackbarWrap: {
     position: "absolute",

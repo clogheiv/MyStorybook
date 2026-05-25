@@ -62,56 +62,78 @@ export default function AddChildScreen({ navigation, route, onAddProfile }) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.mainContent}>
-          <Text style={styles.title}>Welcome to My Storybook</Text>
-          <Text style={styles.subtitle}>Add your child's name to begin.</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            style={styles.input}
-            placeholder="Child name"
-            placeholderTextColor="rgba(244,241,255,0.55)"
-            autoCapitalize="words"
-            autoCorrect={false}
-            returnKeyType="done"
-            editable={!isSaving}
-            onSubmitEditing={saveProfile}
-          />
-          <Text style={styles.fieldLabel}>Character Style</Text>
-          <View style={styles.characterStyleSelector}>
-            {CHARACTER_STYLE_OPTIONS.map((option) => {
-              const isSelected = option.key === characterStyle;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.characterStyleButton,
-                    isSelected && styles.characterStyleButtonSelected,
-                  ]}
-                  onPress={() => setCharacterStyle(option.key)}
-                  disabled={isSaving}
-                >
-                  <Text style={styles.characterStyleIcon}>{option.icon}</Text>
-                  <Text
-                    style={[
-                      styles.characterStyleButtonText,
-                      isSelected && styles.characterStyleButtonTextSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.topBar}>
+            <View style={styles.titleBlock}>
+              <Text style={styles.appName}>My Storybook</Text>
+              <Text style={styles.title}>Create a child profile</Text>
+            </View>
+            <Text style={styles.moonAccent}>{"\u{263E}"}</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
-            onPress={saveProfile}
-            disabled={!canSave}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSaving ? "Saving..." : "Save"}
-            </Text>
-          </TouchableOpacity>
+
+          <View style={styles.formCard}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.subtitle}>
+                Add your child's name and choose a character style.
+              </Text>
+              <View style={styles.bookMotif}>
+                <View style={[styles.bookSpine, styles.bookSpineTall]} />
+                <View style={[styles.bookSpine, styles.bookSpineGold]} />
+                <View style={[styles.bookSpine, styles.bookSpineBlue]} />
+              </View>
+            </View>
+
+            <Text style={styles.fieldLabel}>Child Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              style={styles.input}
+              placeholder="Child name"
+              placeholderTextColor="#8A8792"
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="done"
+              editable={!isSaving}
+              onSubmitEditing={saveProfile}
+            />
+
+            <Text style={styles.fieldLabel}>Character Style</Text>
+            <View style={styles.characterStyleSelector}>
+              {CHARACTER_STYLE_OPTIONS.map((option) => {
+                const isSelected = option.key === characterStyle;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.characterStyleButton,
+                      isSelected && styles.characterStyleButtonSelected,
+                    ]}
+                    onPress={() => setCharacterStyle(option.key)}
+                    disabled={isSaving}
+                  >
+                    <Text style={styles.characterStyleIcon}>{option.icon}</Text>
+                    <Text
+                      style={[
+                        styles.characterStyleButtonText,
+                        isSelected && styles.characterStyleButtonTextSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
+              onPress={saveProfile}
+              disabled={!canSave}
+            >
+              <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
+                {isSaving ? "Saving..." : "Save"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -121,103 +143,191 @@ export default function AddChildScreen({ navigation, route, onAddProfile }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#241A3A",
+    backgroundColor: "#F7EFE2",
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 24,
+    paddingBottom: 42,
   },
   mainContent: {
     flexGrow: 1,
     justifyContent: "flex-start",
-    paddingHorizontal: 24,
-    paddingVertical: 36,
+    paddingHorizontal: 18,
+    paddingTop: 26,
+    paddingBottom: 44,
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  titleBlock: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  appName: {
+    color: "#8B6F3E",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    marginBottom: 5,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#F4F1FF",
-    letterSpacing: 0.3,
+    fontSize: 30,
+    fontWeight: "900",
+    color: "#25283A",
+    letterSpacing: 0,
+    lineHeight: 35,
+  },
+  moonAccent: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#E8DFF3",
+    color: "#493B63",
+    fontSize: 23,
+    lineHeight: 42,
+    overflow: "hidden",
     textAlign: "center",
-    marginBottom: 10,
+  },
+  formCard: {
+    borderRadius: 28,
+    backgroundColor: "#FFF9EE",
+    borderWidth: 1,
+    borderColor: "#E4D2B8",
+    padding: 18,
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.13,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
   },
   subtitle: {
-    fontSize: 15,
-    color: "#CFC5E5",
-    opacity: 0.9,
-    textAlign: "center",
-    marginBottom: 22,
-    letterSpacing: 0.15,
+    flex: 1,
+    fontSize: 18,
+    color: "#303344",
+    fontWeight: "800",
+    lineHeight: 24,
+    letterSpacing: 0,
+    paddingRight: 12,
+  },
+  bookMotif: {
+    width: 58,
+    height: 72,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 5,
+  },
+  bookSpine: {
+    width: 14,
+    height: 54,
+    borderRadius: 6,
+    backgroundColor: "#B7A2D8",
+  },
+  bookSpineTall: {
+    height: 68,
+    backgroundColor: "#6E5A8A",
+  },
+  bookSpineGold: {
+    height: 60,
+    backgroundColor: "#C6A45D",
+  },
+  bookSpineBlue: {
+    height: 48,
+    backgroundColor: "#8DAFC3",
   },
   input: {
-    height: 46,
-    borderRadius: 12,
+    minHeight: 50,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.18)",
-    backgroundColor: "rgba(47,35,79,0.58)",
-    color: "#F4F1FF",
-    paddingHorizontal: 12,
-    fontSize: 15,
-    marginBottom: 14,
+    borderColor: "#DED0BD",
+    backgroundColor: "#FFFFFF",
+    color: "#25283A",
+    paddingHorizontal: 14,
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 18,
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: "700",
-    color: "#CFC5E5",
-    opacity: 0.86,
-    letterSpacing: 0.2,
-    marginBottom: 8,
+    fontWeight: "900",
+    color: "#8B6F3E",
+    letterSpacing: 0,
+    marginBottom: 9,
   },
   characterStyleSelector: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 18,
+    gap: 10,
+    marginBottom: 22,
   },
   characterStyleButton: {
+    flexGrow: 1,
+    flexBasis: "46%",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.18)",
-    backgroundColor: "rgba(47,35,79,0.58)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 6,
+    borderColor: "#E4D2B8",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 8,
   },
   characterStyleButtonSelected: {
-    borderColor: "rgba(255,230,180,0.36)",
-    backgroundColor: "rgba(167,139,250,0.24)",
+    borderColor: "#D4B989",
+    backgroundColor: "#F0DDAF",
   },
   characterStyleIcon: {
-    fontSize: 16,
+    fontSize: 18,
   },
   characterStyleButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#CFC5E5",
-    letterSpacing: 0.15,
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#493B63",
+    letterSpacing: 0,
   },
   characterStyleButtonTextSelected: {
-    color: "#F4F1FF",
+    color: "#493B63",
   },
   saveButton: {
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
-    paddingVertical: 14,
-    backgroundColor: "#A78BFA",
+    borderRadius: 20,
+    paddingVertical: 17,
+    paddingHorizontal: 24,
+    backgroundColor: "#493B63",
+    shadowColor: "#4C3C62",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    elevation: 6,
   },
   saveButtonDisabled: {
-    opacity: 0.5,
+    backgroundColor: "#D3C7B7",
+    borderWidth: 1,
+    borderColor: "#C4B6A3",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   saveButtonText: {
-    color: "#1F1633",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.2,
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  saveButtonTextDisabled: {
+    color: "#7C756C",
   },
 });

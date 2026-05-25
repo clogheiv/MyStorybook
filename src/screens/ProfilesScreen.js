@@ -128,8 +128,11 @@ export default function ProfilesScreen({
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.mainContent}>
-          <Text style={styles.title}>Profiles</Text>
-          <Text style={styles.subtitle}>Choose the child for tonight's story.</Text>
+          <View style={styles.headerCard}>
+            <Text style={styles.eyebrow}>Family Library</Text>
+            <Text style={styles.title}>Profiles</Text>
+            <Text style={styles.subtitle}>Choose who is reading tonight.</Text>
+          </View>
 
           <View style={styles.listWrap}>
             {profiles.map((profile) => {
@@ -140,10 +143,24 @@ export default function ProfilesScreen({
                     style={styles.profileTapArea}
                     onPress={() => onPressProfile(profile.id)}
                   >
-                    <Text style={[styles.profileName, isActive && styles.profileNameActive]}>
-                      {profile.name}
-                    </Text>
-                    {isActive ? <Text style={styles.selectedStatus}>Selected</Text> : null}
+                    <View style={[styles.profileAvatar, isActive && styles.profileAvatarActive]}>
+                      <Text
+                        style={[
+                          styles.profileAvatarText,
+                          isActive && styles.profileAvatarTextActive,
+                        ]}
+                      >
+                        {profile.name?.trim()?.charAt(0)?.toUpperCase() || "?"}
+                      </Text>
+                    </View>
+                    <View style={styles.profileTextWrap}>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.profileName, isActive && styles.profileNameActive]}
+                      >
+                        {profile.name}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                   {isActive ? (
                     <View style={styles.selectedBadge}>
@@ -226,213 +243,266 @@ export default function ProfilesScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#241A3A",
+    backgroundColor: "#F7EFE2",
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 24,
+    paddingBottom: 48,
   },
   mainContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 28,
+    paddingHorizontal: 18,
+    paddingTop: 24,
+    paddingBottom: 44,
+  },
+  headerCard: {
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "#E4D2B8",
+    backgroundColor: "#FFF9EE",
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    marginBottom: 16,
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  eyebrow: {
+    color: "#8B6F3E",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    marginBottom: 5,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#F4F1FF",
-    letterSpacing: 0.25,
-    marginBottom: 8,
+    fontSize: 30,
+    fontWeight: "900",
+    color: "#25283A",
+    letterSpacing: 0,
+    lineHeight: 34,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 14,
-    color: "#CFC5E5",
-    opacity: 0.85,
-    marginBottom: 18,
-    letterSpacing: 0.15,
+    fontSize: 16,
+    color: "#51566C",
+    fontWeight: "700",
+    lineHeight: 22,
+    letterSpacing: 0,
   },
   listWrap: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   profileItem: {
-    borderRadius: 14,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.16)",
-    backgroundColor: "rgba(47,35,79,0.52)",
-    paddingVertical: 10,
+    borderColor: "#E4D2B8",
+    backgroundColor: "#FFFCF4",
+    paddingVertical: 11,
     paddingHorizontal: 12,
-    marginBottom: 10,
+    marginBottom: 11,
     flexDirection: "row",
     alignItems: "center",
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
   },
   profileItemActive: {
-    borderColor: "rgba(255,230,180,0.34)",
-    backgroundColor: "rgba(47,35,79,0.76)",
+    borderColor: "#C9B2E5",
+    backgroundColor: "#F2EAF8",
   },
   profileTapArea: {
     flex: 1,
-    paddingVertical: 4,
-    paddingRight: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 2,
+    paddingRight: 8,
+    gap: 11,
+  },
+  profileAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0DDAF",
+    borderWidth: 1,
+    borderColor: "#D4B989",
+  },
+  profileAvatarActive: {
+    backgroundColor: "#6E5A8A",
+    borderColor: "#6E5A8A",
+  },
+  profileAvatarText: {
+    color: "#493B63",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  profileAvatarTextActive: {
+    color: "#FFFFFF",
+  },
+  profileTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   profileName: {
-    fontSize: 16,
-    color: "#CFC5E5",
-    letterSpacing: 0.15,
-    fontWeight: "600",
+    fontSize: 17,
+    color: "#25283A",
+    letterSpacing: 0,
+    fontWeight: "900",
   },
   profileNameActive: {
-    color: "#F4F1FF",
-  },
-  selectedStatus: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#DCD2F3",
-    letterSpacing: 0.15,
-    fontWeight: "600",
+    color: "#493B63",
   },
   selectedBadge: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.32)",
-    backgroundColor: "rgba(47,35,79,0.72)",
+    borderColor: "#D4B989",
+    backgroundColor: "#F0DDAF",
     paddingVertical: 6,
     paddingHorizontal: 10,
     marginRight: 8,
   },
   selectedBadgeText: {
     fontSize: 12,
-    fontWeight: "700",
-    color: "#F4F1FF",
-    letterSpacing: 0.2,
+    fontWeight: "900",
+    color: "#493B63",
+    letterSpacing: 0,
   },
   characterStylePanel: {
-    borderRadius: 14,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.14)",
-    backgroundColor: "rgba(47,35,79,0.42)",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginBottom: 12,
+    borderColor: "#E4D2B8",
+    backgroundColor: "#FFF9EE",
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    marginBottom: 14,
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
   },
   characterStyleLabel: {
     fontSize: 12,
-    fontWeight: "700",
-    color: "#CFC5E5",
-    opacity: 0.86,
-    letterSpacing: 0.2,
-    marginBottom: 8,
+    fontWeight: "900",
+    color: "#8B6F3E",
+    letterSpacing: 0,
+    marginBottom: 10,
   },
   characterStyleSelector: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 10,
   },
   characterStyleButton: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.18)",
-    backgroundColor: "rgba(47,35,79,0.58)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    borderColor: "#DED0BD",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 9,
+    paddingHorizontal: 13,
     gap: 6,
   },
   characterStyleButtonSelected: {
-    borderColor: "rgba(255,230,180,0.36)",
-    backgroundColor: "rgba(167,139,250,0.24)",
+    borderColor: "#C9B2E5",
+    backgroundColor: "#E8DFF3",
   },
   characterStyleIcon: {
     fontSize: 16,
   },
   characterStyleButtonText: {
     fontSize: 13,
-    fontWeight: "700",
-    color: "#CFC5E5",
-    letterSpacing: 0.15,
+    fontWeight: "900",
+    color: "#51566C",
+    letterSpacing: 0,
   },
   characterStyleButtonTextSelected: {
-    color: "#F4F1FF",
+    color: "#493B63",
   },
   primaryContinueButton: {
     width: "100%",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.36)",
-    backgroundColor: "#A78BFA",
-    paddingVertical: 15,
+    borderRadius: 20,
+    backgroundColor: "#493B63",
+    paddingVertical: 17,
     paddingHorizontal: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
+    marginBottom: 16,
+    shadowColor: "#4C3C62",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
     elevation: 6,
   },
   primaryContinueText: {
     fontSize: 17,
-    fontWeight: "800",
-    color: "#241A3A",
-    letterSpacing: 0.2,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0,
     marginBottom: 3,
   },
   primaryContinueSubtext: {
     fontSize: 12,
-    fontWeight: "700",
-    color: "rgba(36,26,58,0.72)",
-    letterSpacing: 0.15,
+    fontWeight: "800",
+    color: "#E8DFF3",
+    letterSpacing: 0,
   },
   deleteButton: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,170,170,0.35)",
-    backgroundColor: "rgba(94,41,56,0.45)",
+    borderColor: "#E8B9B3",
+    backgroundColor: "#F7DDDA",
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
   deleteButtonText: {
     fontSize: 12,
-    fontWeight: "700",
-    color: "#F4C4CC",
-    letterSpacing: 0.2,
+    fontWeight: "900",
+    color: "#9F4D4D",
+    letterSpacing: 0,
   },
   actionsRow: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
     gap: 10,
+    paddingBottom: 18,
   },
   addChildButton: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,230,180,0.25)",
-    backgroundColor: "rgba(47,35,79,0.72)",
-    paddingVertical: 9,
-    paddingHorizontal: 14,
+    borderColor: "#DED0BD",
+    backgroundColor: "#FFFCF4",
+    paddingVertical: 11,
+    paddingHorizontal: 15,
   },
   addChildButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#F4F1FF",
-    letterSpacing: 0.2,
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#493B63",
+    letterSpacing: 0,
   },
   resetButton: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,170,170,0.3)",
-    backgroundColor: "rgba(94,41,56,0.35)",
-    paddingVertical: 9,
-    paddingHorizontal: 14,
+    borderColor: "#E8B9B3",
+    backgroundColor: "#FFF9EE",
+    paddingVertical: 11,
+    paddingHorizontal: 15,
   },
   resetButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#F4C4CC",
-    letterSpacing: 0.2,
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#9F4D4D",
+    letterSpacing: 0,
   },
 });

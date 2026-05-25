@@ -1,8 +1,10 @@
 import React from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -80,11 +82,12 @@ const extractActiveStories = (storedValue, catalogById) => {
 export default function HomeScreen({ selectedProfile }) {
   const navigation = useNavigation();
   const selectedChild = selectedProfile || null;
+  const hasSelectedChild = !!selectedChild;
   const childId = React.useMemo(() => resolveChildId(selectedChild), [selectedChild]);
   const catalogById = React.useMemo(() => catalogStoryById(), []);
   const [continueEntry, setContinueEntry] = React.useState(null);
   const shelfStories = React.useMemo(
-    () => loadStoryCatalog().filter((story) => !story.isComingSoon).slice(0, 3),
+    () => loadStoryCatalog().filter((story) => !story.isComingSoon),
     []
   );
 
@@ -201,6 +204,31 @@ export default function HomeScreen({ selectedProfile }) {
     if (!selectedChild) return;
     navigation.navigate("StoryPicker", { selectedChild });
   }, [navigation, selectedChild]);
+  const openAddChild = React.useCallback(() => {
+    navigation.navigate("AddChild");
+  }, [navigation]);
+  const openChildActions = React.useCallback(() => {
+    Alert.alert("Reading Profile", "What would you like to do?", [
+      {
+        text: "Switch Child",
+        onPress: () => navigation.navigate("SelectChild"),
+      },
+      {
+        text: "Manage Kids",
+        onPress: () => navigation.navigate("Profiles"),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [navigation]);
+  const openStoryDetails = React.useCallback(
+    (story) => {
+      navigation.navigate("StoryDetails", {
+        story,
+        selectedChild,
+      });
+    },
+    [navigation, selectedChild]
+  );
   const personalizedContinueStory = React.useMemo(
     () => (continueEntry?.story ? personalizeStoryForChild(continueEntry.story, selectedChild) : null),
     [continueEntry?.story, selectedChild]
@@ -232,21 +260,35 @@ export default function HomeScreen({ selectedProfile }) {
         <View style={styles.mainContent}>
           <View style={styles.topBar}>
             <View style={styles.titleBlock}>
-              <Text style={styles.appName}>MY STORYBOOK</Text>
-              <Text style={styles.title}>Tonight's Storytime</Text>
+              <Text style={styles.title}>My Storybook</Text>
             </View>
             <Text style={styles.moonAccent}>{"\u{263E}"}</Text>
           </View>
 
           <View style={styles.heroCard}>
             <View style={styles.heroTextWrap}>
-              <Text style={styles.subtitle}>
-                {selectedChild?.name
-                  ? `Pick a story for ${selectedChild.name}`
-                  : "Choose who we're reading with, then choose a story."}
-              </Text>
+              {hasSelectedChild ? (
+                <Text style={styles.subtitle}>
+                  {selectedChild?.name
+                    ? `Pick a story for ${selectedChild.name}`
+                    : "Pick a story for tonight"}
+                </Text>
+              ) : (
+                <>
+                  <Text style={styles.subtitle}>Create your first child profile</Text>
+                  <Text style={styles.firstRunText}>
+                    Add a child to personalize tonight's story.
+                  </Text>
+                </>
+              )}
               {selectedChild?.name ? (
-                <View style={styles.activeChildPill}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.activeChildPill,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={openChildActions}
+                >
                   <View style={styles.avatarBadge}>
                     <Text style={styles.avatarText}>
                       {selectedChild.name.trim().charAt(0).toUpperCase()}
@@ -255,7 +297,8 @@ export default function HomeScreen({ selectedProfile }) {
                   <Text numberOfLines={1} style={styles.activeChildText}>
                     {selectedChild.name}
                   </Text>
-                </View>
+                  <Text style={styles.activeChildChange}>Change</Text>
+                </Pressable>
               ) : null}
             </View>
             <View style={styles.heroBooks}>
@@ -265,7 +308,7 @@ export default function HomeScreen({ selectedProfile }) {
             </View>
           </View>
 
-          {continueEntry ? (
+          {continueEntry && hasSelectedChild ? (
             <TouchableOpacity style={styles.continueButton} onPress={openContinueReading}>
               <View style={styles.continueCopy}>
                 <Text style={styles.sectionLabel}>Continue Reading</Text>
@@ -287,57 +330,68 @@ export default function HomeScreen({ selectedProfile }) {
             </TouchableOpacity>
           ) : null}
 
-          <View style={styles.shelfSection}>
-            <View style={styles.shelfHeader}>
-              <Text style={styles.sectionLabel}>Tonight's Picks</Text>
+          {hasSelectedChild ? (
+            <View style={styles.shelfSection}>
+              <View style={styles.shelfHeader}>
+                <Text style={styles.sectionLabel}>Tonight's Picks</Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.bookShelf}
+              >
+                {shelfStories.map((story, index) => {
+                  const imageSource = resolveStoryPageIllustrationAsset({
+                    storyId: story.id,
+                    pageNumber: 1,
+                    gender: selectedCharacterStyle,
+                  });
+                  return (
+                    <Pressable
+                      key={story.id}
+                      style={({ pressed }) => [
+                        styles.storyPreview,
+                        index === 1 && styles.storyPreviewLifted,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => openStoryDetails(story)}
+                    >
+                      <View style={styles.storyCover}>
+                        {imageSource ? (
+                          <Image source={imageSource} style={styles.storyImage} />
+                        ) : (
+                          <View style={styles.staticCover} />
+                        )}
+                      </View>
+                      <Text numberOfLines={2} style={styles.storyPreviewTitle}>
+                        {story.title}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <View style={styles.shelfRail} />
             </View>
-            <View style={styles.bookShelf}>
-              {shelfStories.map((story, index) => {
-                const imageSource = resolveStoryPageIllustrationAsset({
-                  storyId: story.id,
-                  pageNumber: 1,
-                  gender: selectedCharacterStyle,
-                });
-                return (
-                  <View
-                    key={story.id}
-                    style={[styles.storyPreview, index === 1 && styles.storyPreviewLifted]}
-                  >
-                    <View style={styles.storyCover}>
-                      {imageSource ? (
-                        <Image source={imageSource} style={styles.storyImage} />
-                      ) : (
-                        <View style={styles.staticCover} />
-                      )}
-                    </View>
-                    <Text numberOfLines={2} style={styles.storyPreviewTitle}>
-                      {story.title}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-            <View style={styles.shelfRail} />
-          </View>
+          ) : null}
 
           <View style={styles.actions}>
             <TouchableOpacity
-              style={[
-                styles.chooseStoryButton,
-                !selectedChild ? styles.chooseStoryButtonDisabled : null,
-              ]}
-              onPress={openStoryCatalog}
-              disabled={!selectedChild}
+              style={styles.chooseStoryButton}
+              onPress={hasSelectedChild ? openStoryCatalog : openAddChild}
             >
-              <Text style={styles.chooseStoryText}>Choose a Story</Text>
+              <Text style={styles.chooseStoryText}>
+                {hasSelectedChild ? "Complete Story List" : "Add Child"}
+              </Text>
             </TouchableOpacity>
+            {!hasSelectedChild ? (
+              <View style={styles.firstRunIllustrationWrap}>
+                <Image
+                  source={require("../../assets/stories/home/child-picker-screen.png")}
+                  style={styles.firstRunIllustration}
+                />
+              </View>
+            ) : null}
 
-            <TouchableOpacity
-              style={styles.manageProfilesButton}
-              onPress={() => navigation.navigate("Profiles")}
-            >
-              <Text style={styles.manageProfilesText}>Manage Kids</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -427,9 +481,15 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 14,
   },
+  firstRunText: {
+    color: "#51566C",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 21,
+  },
   activeChildPill: {
     alignSelf: "flex-start",
-    maxWidth: "92%",
+    maxWidth: "100%",
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 999,
@@ -438,6 +498,9 @@ const styles = StyleSheet.create({
     paddingLeft: 6,
     paddingRight: 12,
     gap: 8,
+  },
+  pressed: {
+    opacity: 0.72,
   },
   avatarBadge: {
     width: 30,
@@ -457,6 +520,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: "#493B63",
+    letterSpacing: 0,
+  },
+  activeChildChange: {
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#8B6F3E",
     letterSpacing: 0,
   },
   heroBooks: {
@@ -558,11 +628,12 @@ const styles = StyleSheet.create({
   },
   bookShelf: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-end",
+    gap: 12,
+    paddingRight: 18,
   },
   storyPreview: {
-    width: "31%",
+    width: 112,
   },
   storyPreviewLifted: {
     marginBottom: 8,
@@ -605,7 +676,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     marginTop: 2,
-    paddingBottom: 18,
+    paddingBottom: 24,
   },
   chooseStoryButton: {
     backgroundColor: "#493B63",
@@ -628,25 +699,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  manageProfilesButton: {
-    alignSelf: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#DED0BD",
-    backgroundColor: "#FFFCF4",
-  },
-  manageProfilesText: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#493B63",
-    letterSpacing: 0,
-  },
   chooseStoryText: {
     fontSize: 18,
     fontWeight: "900",
     color: "#FFFFFF",
     letterSpacing: 0,
+  },
+  firstRunIllustrationWrap: {
+    alignItems: "center",
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 342,
+    marginTop: 12,
+    borderRadius: 28,
+    backgroundColor: "#FFF9EE",
+    borderWidth: 1,
+    borderColor: "#E4D2B8",
+    paddingHorizontal: 8,
+    paddingTop: 10,
+    paddingBottom: 30,
+    shadowColor: "#7A6041",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  firstRunIllustration: {
+    width: "100%",
+    maxWidth: 330,
+    height: 280,
+    borderRadius: 26,
+    resizeMode: "contain",
   },
 });

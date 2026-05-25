@@ -135,7 +135,7 @@ export default function AppNavigator() {
         createdAt: Date.now(),
       };
       const nextProfiles = [...profiles, newProfile];
-      const nextSelectedProfileId = selectedProfileId || newProfile.id;
+      const nextSelectedProfileId = newProfile.id;
 
       await Promise.all([
         persistProfiles(nextProfiles),
@@ -144,7 +144,7 @@ export default function AppNavigator() {
 
       return newProfile;
     },
-    [persistProfiles, persistSelectedProfileId, profiles, selectedProfileId]
+    [persistProfiles, persistSelectedProfileId, profiles]
   );
 
   const onSelectProfile = React.useCallback(
@@ -230,7 +230,7 @@ export default function AppNavigator() {
 
   const initialRouteName =
     profiles.length === 0
-      ? "AddChild"
+      ? "Home"
       : !selectedProfile
       ? "SelectChild"
       : "Home";
