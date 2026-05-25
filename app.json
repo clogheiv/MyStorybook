@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "My Storybook",
+    "slug": "my-storybook",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -13,6 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.clogherlabs.mystorybook",
+      "buildNumber": "1",
       "supportsTablet": true
     },
     "android": {
