@@ -117,19 +117,19 @@ const STORY_CATALOG = [
     description: "A big, cheerful arena adventure with giant tires, colorful trucks, muddy splashes, and a roaring finale.",
     artStyle: "cozy",
     estimatedReadTime: 5,
-    pages: withSequentialIllustrationNames("monster_truck_placeholder", [
+    pages: withStoryPageIllustrations("my-first-monster-truck-show", [
       "The arena lights glowed bright as {{childName}} walked inside for the very first monster truck show.\n\nHuge tires towered near the track, and colorful trucks waited under the sparkling lights.\n\nEverything felt big, loud, and exciting.",
       "A deep rumble shook the seats as the first monster truck rolled forward.\n\n{{childName}} covered their ears and grinned as the engine roared like thunder.\n\nThe whole crowd cheered together.",
       "One blue truck bounced over a row of dirt bumps with its giant wheels rolling high.\n\n{{childName}} watched the truck climb, dip, and rumble across the track.\n\nIt looked like a toy truck come to life.",
       "Then a bright red truck drove slowly around the arena waving to the crowd.\n\n{{childName}} waved back as the driver gave a friendly thumbs-up from the window.\n\nThe truck’s headlights shined like happy eyes.",
-      "Soon the trucks lined up for the jump ramp.\n\n{{childName}} held their breath as one monster truck climbed the ramp and flew through the air.\n\nFor one amazing moment, it looked like the truck was touching the lights.",
+      "Soon the trucks lined up for the jump ramp.\n\n{{childName}} watched one monster truck climb the ramp and fly through the air.\n\nFor one amazing moment, it looked like the truck was touching the lights.",
       "The truck landed with a giant BOOM that made the dirt puff up beneath its tires.\n\n{{childName}} laughed and clapped as the crowd jumped to its feet.\n\nEven the floor seemed to cheer.",
       "Next came the muddy part of the track.\n\nA green truck spun its huge tires and splashed mud in every direction.\n\n{{childName}} giggled as muddy drops flew across the bright arena lights.",
-      "During a quiet break, {{childName}} got to see a monster truck up close.\n\nThe tire was taller than them, with deep grooves big enough to hide tiny shadows.\n\nIt was the biggest wheel they had ever seen.",
+      "During a quiet break, {{childName}} got to see a monster truck up close.\n\nThe tire towered overhead, with deep grooves big enough to hide tiny shadows.\n\nIt was the biggest wheel {{childName}} had ever seen.",
       "A small toy monster truck waited at the souvenir table.\n\n{{childName}} held it carefully and rolled it across their lap.\n\nNow there was a little truck to remember the big show.",
       "For the finale, all the monster trucks rolled out together in a colorful parade.\n\n{{childName}} saw red, blue, green, yellow, and purple trucks rumbling side by side.\n\nThe arena sparkled with lights, cheers, and engine sounds.",
       "When the final horn sounded, the trucks parked beneath the glowing lights.\n\n{{childName}} clapped as hard as they could, still smiling from all the jumps and rumbles.\n\nThe first monster truck show had been even better than imagined.",
-      "“I want to come back again,” {{childName}} said with a happy grin.\n\nThere had been giant tires, roaring engines, flying jumps, muddy splashes, and cheers all around.\n\nIt was an adventure they would never forget. 🛞✨",
+      "“I want to come back again,” {{childName}} said with a happy grin.\n\nThere had been giant tires, roaring engines, flying jumps, muddy splashes, and cheers all around.\n\nIt was an adventure {{childName}} would never forget. 🛞✨",
     ]),
   },
 ];
