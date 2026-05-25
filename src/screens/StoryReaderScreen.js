@@ -23,6 +23,7 @@ import * as Haptics from "expo-haptics";
 import { useFonts } from "expo-font";
 import { Nunito_400Regular } from "@expo-google-fonts/nunito";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import { catalogStoryById } from "../data/storyCatalog";
 import { characterStyleFromLegacyData } from "../data/characterStyles";
 import { generateImageFromAI, buildIllustrationPrompt } from "../utils/imageGeneration";
@@ -299,11 +300,29 @@ export default function StoryReaderScreen({ navigation, route }) {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  // Lock to landscape while reading
-  useEffect(() => {
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-    return () => ScreenOrientation.unlockAsync();
-  }, []);
+  // Lock to landscape whenever the reader is focused, then restore app default on exit.
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+
+      const lockLandscape = async () => {
+        try {
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        } catch {
+          // Keep the reader usable even if Expo Go or the OS refuses the lock.
+        }
+      };
+
+      if (isActive) {
+        lockLandscape();
+      }
+
+      return () => {
+        isActive = false;
+        ScreenOrientation.unlockAsync().catch(() => {});
+      };
+    }, [])
+  );
 
   // Hide bottom nav bar on Android (immersive reading)
   useEffect(() => {
@@ -1330,7 +1349,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                         <Image
                           source={imgSource}
                           style={styles.staticIllustrationImage}
-                          resizeMode="cover"
+                          resizeMode="contain"
                         />
                       </View>
                     ) : null}
@@ -1347,7 +1366,7 @@ export default function StoryReaderScreen({ navigation, route }) {
                       <Animated.Image
                         source={{ uri: img }}
                         style={[{ width: "100%", height: "100%", borderRadius: 0 }, { opacity: opacity || 1 }]}
-                        resizeMode="cover"
+                        resizeMode="contain"
                         onLoad={() => {
                           setFailedImages((prev) => {
                             if (!prev[k]) return prev;
@@ -1977,10 +1996,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   staticIllustrationContainer: {
+    flex: 1,
     width: "100%",
-    height: 220,
+    height: "100%",
     overflow: "hidden",
-    borderRadius: 16,
+    borderRadius: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   staticIllustrationImage: {
     width: "100%",
