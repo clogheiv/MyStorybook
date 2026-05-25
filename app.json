@@ -16,7 +16,13 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "bundleIdentifier": "com.clogherlabs.mystorybook",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
