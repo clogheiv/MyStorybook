@@ -30,6 +30,12 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dda1865d-ba3a-4722-a8ed-aa6c1d3c4412"
+      }
+    },
+    "owner": "clogheriv"
   }
 }
