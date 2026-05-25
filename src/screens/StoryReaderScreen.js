@@ -9,7 +9,6 @@ import {
   useWindowDimensions,
   FlatList,
   Platform,
-  Alert,
   BackHandler,
   Image,
   Animated,
@@ -290,9 +289,13 @@ export default function StoryReaderScreen({ navigation, route }) {
 
   const { width: pageWidth, height } = useWindowDimensions();
   const isLandscape = pageWidth > height;
+  const [orientationReady, setOrientationReady] = useState(
+    Platform.OS !== "ios" || pageWidth > height
+  );
 
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
+  const readerFocusedRef = useRef(false);
   const ENABLE_PAGE_TURN_ILLUSION = true;
 
   // Hide navigation header
@@ -304,6 +307,11 @@ export default function StoryReaderScreen({ navigation, route }) {
   useFocusEffect(
     React.useCallback(() => {
       let isActive = true;
+      let fallbackTimer = null;
+      readerFocusedRef.current = true;
+      if (Platform.OS === "ios") {
+        setOrientationReady(false);
+      }
 
       const lockLandscape = async () => {
         try {
@@ -317,12 +325,32 @@ export default function StoryReaderScreen({ navigation, route }) {
         lockLandscape();
       }
 
+      if (Platform.OS === "ios") {
+        fallbackTimer = setTimeout(() => {
+          if (isActive) {
+            setOrientationReady(true);
+          }
+        }, 3000);
+      }
+
       return () => {
         isActive = false;
+        readerFocusedRef.current = false;
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+        }
         ScreenOrientation.unlockAsync().catch(() => {});
       };
     }, [])
   );
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    if (!readerFocusedRef.current) return;
+    if (!isLandscape) return;
+
+    setOrientationReady(true);
+  }, [isLandscape]);
 
   // Hide bottom nav bar on Android (immersive reading)
   useEffect(() => {
@@ -444,6 +472,8 @@ export default function StoryReaderScreen({ navigation, route }) {
   const [completionCelebrated, setCompletionCelebrated] = useState(false);
   const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [exitPromptState, setExitPromptState] = useState(null);
+  const [isClosingReader, setIsClosingReader] = useState(false);
   const totalPages = pages.length;
   const progressRatio = totalPages > 0 ? (pageIndex + 1) / totalPages : 0;
 
@@ -473,6 +503,8 @@ export default function StoryReaderScreen({ navigation, route }) {
   const lastSettleFeedbackIndexRef = useRef(0);
   const programmaticTargetIndexRef = useRef(null);
   const allowExitRef = useRef(false);
+  const exitPromptOpenRef = useRef(false);
+  const isClosingReaderRef = useRef(false);
   const latestProgressRef = useRef({
     pageIndex: 0,
     artStyle,
@@ -529,6 +561,15 @@ export default function StoryReaderScreen({ navigation, route }) {
   // Composite cache key: page index + art style
   const keyFor = (index, style) => `${index}|${style}`;
   const isStoryComplete = totalPages > 0 && pageIndex >= totalPages - 1;
+  const exitPromptVisible = exitPromptState != null;
+
+  useEffect(() => {
+    exitPromptOpenRef.current = exitPromptVisible;
+  }, [exitPromptVisible]);
+
+  useEffect(() => {
+    isClosingReaderRef.current = isClosingReader;
+  }, [isClosingReader]);
 
   useEffect(() => {
     const bundledIllustrationUris = [
@@ -573,28 +614,53 @@ export default function StoryReaderScreen({ navigation, route }) {
     };
   }, [pages]);
 
-  const requestExitReader = React.useCallback(
-    (pendingAction = null) => {
-      const performLeave = () => {
-        allowExitRef.current = true;
-        if (pendingAction) {
-          navigation.dispatch(pendingAction);
-          return;
-        }
-        navigation.goBack();
-      };
+  const closeExitPrompt = React.useCallback(() => {
+    if (isClosingReaderRef.current) return;
+    setExitPromptState(null);
+  }, []);
 
-      if (isStoryComplete) {
-        performLeave();
+  const finishExitReader = React.useCallback(
+    async (pendingAction = null) => {
+      if (isClosingReaderRef.current) return;
+
+      isClosingReaderRef.current = true;
+      allowExitRef.current = true;
+      setExitPromptState(null);
+      setIsClosingReader(true);
+
+      if (Platform.OS === "ios") {
+        try {
+          await ScreenOrientation.unlockAsync();
+        } catch {
+          // Continue navigation even if iOS declines the orientation restore.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
+      if (pendingAction) {
+        navigation.dispatch(pendingAction);
         return;
       }
 
-      Alert.alert("Leave story?", "Your progress is saved.", [
-        { text: "Keep reading", style: "cancel" },
-        { text: "Leave", onPress: performLeave },
-      ]);
+      navigation.goBack();
     },
-    [isStoryComplete, navigation]
+    [navigation]
+  );
+
+  const requestExitReader = React.useCallback(
+    (pendingAction = null) => {
+      if (isClosingReaderRef.current) return;
+      if (Platform.OS === "ios" && !orientationReady) return;
+
+      if (isStoryComplete) {
+        finishExitReader(pendingAction);
+        return;
+      }
+
+      if (exitPromptOpenRef.current) return;
+      setExitPromptState({ pendingAction });
+    },
+    [finishExitReader, isStoryComplete, orientationReady]
   );
 
   const clearCompletionTimer = React.useCallback(() => {
@@ -622,6 +688,16 @@ export default function StoryReaderScreen({ navigation, route }) {
         return;
       }
 
+      if (isClosingReaderRef.current) {
+        event.preventDefault();
+        return;
+      }
+
+      if (Platform.OS === "ios" && !orientationReady) {
+        event.preventDefault();
+        return;
+      }
+
       if (isStoryComplete) {
         return;
       }
@@ -631,7 +707,7 @@ export default function StoryReaderScreen({ navigation, route }) {
     });
 
     return unsubscribeBeforeRemove;
-  }, [isStoryComplete, navigation, requestExitReader]);
+  }, [isStoryComplete, navigation, orientationReady, requestExitReader]);
 
   const retryImageForPage = (index, promptText) => {
     const k = keyFor(index, artStyle);
@@ -1478,6 +1554,31 @@ export default function StoryReaderScreen({ navigation, route }) {
     );
   }
 
+  if (isClosingReader) {
+    return (
+      <View style={styles.closingPlaceholder}>
+        <StatusBar hidden />
+        <ActivityIndicator size="small" color="#C8B04A" />
+        <Text style={styles.closingPlaceholderText}>Closing your story...</Text>
+      </View>
+    );
+  }
+
+  if (Platform.OS === "ios" && !orientationReady) {
+    return (
+      <View style={styles.orientationPlaceholder}>
+        <StatusBar hidden />
+        <ActivityIndicator size="small" color="#C8B04A" />
+        <Text style={styles.orientationPlaceholderIcon}>{"\u21BB"}</Text>
+        <Text style={styles.orientationPlaceholderTitle}>Rotate your phone</Text>
+        <Text style={styles.orientationPlaceholderText}>Opening your story...</Text>
+        <Text style={styles.orientationPlaceholderHelper}>
+          The book opens best in landscape.
+        </Text>
+      </View>
+    );
+  }
+
   if (!isHydrated) {
     return (
       <View style={styles.hydrationPlaceholder}>
@@ -1662,6 +1763,31 @@ export default function StoryReaderScreen({ navigation, route }) {
       </View>
       </Animated.View>
 
+      {exitPromptVisible && !isClosingReader ? (
+        <View style={styles.readerExitOverlay}>
+          <View style={styles.readerExitCard}>
+            <Text style={styles.readerExitTitle}>Leave story?</Text>
+            <Text style={styles.readerExitSubtitle}>Your progress is saved.</Text>
+            <View style={styles.readerExitActions}>
+              <TouchableOpacity
+                style={styles.readerExitContinueButton}
+                onPress={closeExitPrompt}
+                disabled={isClosingReader}
+              >
+                <Text style={styles.readerExitContinueText}>Continue Reading</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.readerExitLeaveButton}
+                onPress={() => finishExitReader(exitPromptState?.pendingAction || null)}
+                disabled={isClosingReader}
+              >
+                <Text style={styles.readerExitLeaveText}>Leave Story</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
       {showCompletionOverlay && (
         <View style={styles.completionOverlay}>
           <View style={styles.completionCard}>
@@ -1717,6 +1843,134 @@ const styles = StyleSheet.create({
     backgroundColor: OUTER_BG,
     alignItems: "center",
     justifyContent: "center",
+  },
+  closingPlaceholder: {
+    flex: 1,
+    backgroundColor: OUTER_BG,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  closingPlaceholderText: {
+    marginTop: 12,
+    color: PAGE_COLOR,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  orientationPlaceholder: {
+    flex: 1,
+    backgroundColor: OUTER_BG,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  orientationPlaceholderIcon: {
+    marginTop: 14,
+    marginBottom: 10,
+    color: "#C8B04A",
+    fontSize: 42,
+    fontWeight: "900",
+    lineHeight: 48,
+  },
+  orientationPlaceholderTitle: {
+    color: PAGE_COLOR,
+    fontSize: 28,
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: 0,
+    marginBottom: 8,
+  },
+  orientationPlaceholderText: {
+    color: PAGE_COLOR,
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "center",
+    opacity: 0.9,
+  },
+  orientationPlaceholderHelper: {
+    marginTop: 8,
+    color: PAGE_COLOR,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+    textAlign: "center",
+    opacity: 0.7,
+  },
+  readerExitOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 35,
+    backgroundColor: "rgba(22,17,33,0.48)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  readerExitCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 26,
+    backgroundColor: PAGE_COLOR,
+    borderWidth: 1,
+    borderColor: "rgba(200,176,74,0.42)",
+    paddingVertical: 24,
+    paddingHorizontal: 22,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  readerExitTitle: {
+    color: INK,
+    fontSize: 26,
+    fontWeight: "900",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  readerExitSubtitle: {
+    color: INK,
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 22,
+    textAlign: "center",
+    opacity: 0.74,
+    marginBottom: 20,
+  },
+  readerExitActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  readerExitContinueButton: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#493B63",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readerExitContinueText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  readerExitLeaveButton: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#F7DDDA",
+    borderWidth: 1,
+    borderColor: "#E8B9B3",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readerExitLeaveText: {
+    color: "#9F4D4D",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
   },
   readingVignette: {
     position: "absolute",
