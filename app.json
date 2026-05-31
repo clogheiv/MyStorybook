@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "My Storybook",
-    "slug": "my-storybook",
+    "name": "PixelPages",
+    "slug": "pixelpages",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": true,
-      "bundleIdentifier": "com.clogherlabs.mystorybook",
+      "bundleIdentifier": "com.clogherlabs.pixelpages",
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -25,6 +25,7 @@
       }
     },
     "android": {
+      "package": "com.clogherlabs.pixelpages",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

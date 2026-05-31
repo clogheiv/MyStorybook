@@ -64,7 +64,7 @@ export default function AddChildScreen({ navigation, route, onAddProfile }) {
         <View style={styles.mainContent}>
           <View style={styles.topBar}>
             <View style={styles.titleBlock}>
-              <Text style={styles.appName}>My Storybook</Text>
+              <Text style={styles.appName}>PixelPages</Text>
               <Text style={styles.title}>Create a child profile</Text>
             </View>
             <Text style={styles.moonAccent}>{"\u{263E}"}</Text>

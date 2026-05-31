@@ -1,7 +1,7 @@
-# My Storybook — Agent Guidelines
+# PixelPages — Agent Guidelines
 
 ## Purpose
-This repository is for building the My Storybook app in a clean, incremental, reviewable way.
+This repository is for building the PixelPages app in a clean, incremental, reviewable way.
 
 ## Rules
 - Never push directly to main.

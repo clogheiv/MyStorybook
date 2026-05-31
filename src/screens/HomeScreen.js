@@ -260,7 +260,7 @@ export default function HomeScreen({ selectedProfile }) {
         <View style={styles.mainContent}>
           <View style={styles.topBar}>
             <View style={styles.titleBlock}>
-              <Text style={styles.title}>My Storybook</Text>
+              <Text style={styles.title}>PixelPages</Text>
             </View>
             <Text style={styles.moonAccent}>{"\u{263E}"}</Text>
           </View>

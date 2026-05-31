@@ -23,7 +23,7 @@ export default function StoryLibraryScreen({ navigation }) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>My Storybook</Text>
+          <Text style={styles.title}>PixelPages</Text>
           <Text style={styles.subtitle}>Stories are better together</Text>
         </View>
 
