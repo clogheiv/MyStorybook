@@ -43,6 +43,8 @@ const COMPLETION_DELAY_MS = 30000;
 const PAGE_INITIAL_RENDER_COUNT = 2;
 const PAGE_BATCH_RENDER_COUNT = 3;
 const PAGE_WINDOW_SIZE = 5;
+// Give iOS a beat to finish orientation/layout settling before mounting the book UI.
+const IOS_READER_LAYOUT_SETTLE_MS = 800;
 const CHILD_NAME_TOKEN_PATTERN = /{{\s*(childName|child['’]s name)\s*}}/gi;
 const DEMO_ILLUSTRATION_PREFIX = "zoo";
 
@@ -296,6 +298,8 @@ export default function StoryReaderScreen({ navigation, route }) {
   // Page-turn illusion: track scroll position
   const scrollX = useRef(new Animated.Value(0)).current;
   const readerFocusedRef = useRef(false);
+  const latestIsLandscapeRef = useRef(isLandscape);
+  const orientationSettleTimerRef = useRef(null);
   const ENABLE_PAGE_TURN_ILLUSION = true;
 
   // Hide navigation header
@@ -326,9 +330,23 @@ export default function StoryReaderScreen({ navigation, route }) {
       }
 
       if (Platform.OS === "ios") {
+        if (latestIsLandscapeRef.current) {
+          orientationSettleTimerRef.current = setTimeout(() => {
+            orientationSettleTimerRef.current = null;
+            if (isActive && readerFocusedRef.current && latestIsLandscapeRef.current) {
+              setOrientationReady(true);
+            }
+          }, IOS_READER_LAYOUT_SETTLE_MS);
+        }
+
         fallbackTimer = setTimeout(() => {
-          if (isActive) {
-            setOrientationReady(true);
+          if (isActive && latestIsLandscapeRef.current && !orientationSettleTimerRef.current) {
+            orientationSettleTimerRef.current = setTimeout(() => {
+              orientationSettleTimerRef.current = null;
+              if (isActive && readerFocusedRef.current && latestIsLandscapeRef.current) {
+                setOrientationReady(true);
+              }
+            }, IOS_READER_LAYOUT_SETTLE_MS);
           }
         }, 3000);
       }
@@ -339,17 +357,47 @@ export default function StoryReaderScreen({ navigation, route }) {
         if (fallbackTimer) {
           clearTimeout(fallbackTimer);
         }
+        if (orientationSettleTimerRef.current) {
+          clearTimeout(orientationSettleTimerRef.current);
+          orientationSettleTimerRef.current = null;
+        }
         ScreenOrientation.unlockAsync().catch(() => {});
       };
     }, [])
   );
 
   useEffect(() => {
-    if (Platform.OS !== "ios") return;
-    if (!readerFocusedRef.current) return;
-    if (!isLandscape) return;
+    latestIsLandscapeRef.current = isLandscape;
+  }, [isLandscape]);
 
-    setOrientationReady(true);
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+
+    if (orientationSettleTimerRef.current) {
+      clearTimeout(orientationSettleTimerRef.current);
+      orientationSettleTimerRef.current = null;
+    }
+
+    if (!readerFocusedRef.current) return;
+
+    if (!isLandscape) {
+      setOrientationReady(false);
+      return;
+    }
+
+    orientationSettleTimerRef.current = setTimeout(() => {
+      orientationSettleTimerRef.current = null;
+      if (readerFocusedRef.current && latestIsLandscapeRef.current) {
+        setOrientationReady(true);
+      }
+    }, IOS_READER_LAYOUT_SETTLE_MS);
+
+    return () => {
+      if (orientationSettleTimerRef.current) {
+        clearTimeout(orientationSettleTimerRef.current);
+        orientationSettleTimerRef.current = null;
+      }
+    };
   }, [isLandscape]);
 
   // Hide bottom nav bar on Android (immersive reading)
